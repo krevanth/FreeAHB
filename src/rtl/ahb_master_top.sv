@@ -26,19 +26,19 @@ module ahb_master_top import ahb_master_pack::*; #(parameter DATA_WDT = 32, para
         // AHB interface.
         // ---------------------------
 
-        input                       i_hclk,
-        input                       i_hreset_n,
-        output    [31:0]            o_haddr,
-        output    t_hburst          o_hburst,
-        output    t_htrans          o_htrans,
-        output    [DATA_WDT-1:0]    o_hwdata,
-        output                      o_hwrite,
-        output    t_hsize           o_hsize,
-        input     [DATA_WDT-1:0]    i_hrdata,
-        input                       i_hready,
-        input     t_hresp           i_hresp,
-        input                       i_hgrant,
-        output                      o_hbusreq,
+        input     logic                  i_hclk,
+        input     logic                  i_hreset_n,
+        output    logic [31:0]           o_haddr,
+        output    t_hburst               o_hburst,
+        output    t_htrans               o_htrans,
+        output    logic [DATA_WDT-1:0]   o_hwdata,
+        output    logic                  o_hwrite,
+        output    t_hsize                o_hsize,
+        input     logic [DATA_WDT-1:0]   i_hrdata,
+        input     logic                  i_hready,
+        input     t_hresp                i_hresp,
+        input     logic                  i_hgrant,
+        output    logic                  o_hbusreq,
 
         // ----------------------------
         // User Interface
@@ -50,35 +50,35 @@ module ahb_master_top import ahb_master_pack::*; #(parameter DATA_WDT = 32, para
         // this can be done only when o_stall = 0. Note HTB: Hold Through Burst.
         // DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION.
 
-        output                   o_stall,        // All UI inputs stalled when 1.
-        input                    i_idle,         // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
-        input     [DATA_WDT-1:0] i_wr_data,      // Data to write. Can change throughout write burst.
-        input                    i_wr_data_dav,  // Data to write valid (Can be gapped to pause writes).
-        input      [31:0]        i_addr,         // Base address of burst. HTB.
-        input      t_hsize       i_size,         // Size of transfer i.e., hsize. HTB.
-        input                    i_wr,           // Write to AHB bus. HTB.
-        input                    i_rd,           // Read from AHB bus. (Can be gapped to pause reads).
-        input     [BEAT_WDT-1:0] i_min_len,      // Minimum guaranteed length of burst i.e., beats. HTB.
-        input                    i_first_xfer,   // Initiate a new burst. Make 0 on subsequent beats.
+        output logic                  o_stall,        // All UI inputs stalled when 1.
+        input  logic                  i_idle,         // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
+        input  logic   [DATA_WDT-1:0] i_wr_data,      // Data to write. Can change throughout write burst.
+        input  logic                  i_wr_data_dav,  // Data to write valid (Can be gapped to pause writes).
+        input  logic    [31:0]        i_addr,         // Base address of burst. HTB.
+        input  t_hsize                i_size,         // Size of transfer i.e., hsize. HTB.
+        input  logic                  i_wr,           // Write to AHB bus. HTB.
+        input  logic                  i_rd,           // Read from AHB bus. (Can be gapped to pause reads).
+        input  logic   [BEAT_WDT-1:0] i_min_len,      // Minimum guaranteed length of burst i.e., beats. HTB.
+        input  logic                  i_first_xfer,   // Initiate a new burst. Make 0 on subsequent beats.
 
         // User Interface (Read Response) - Always in order. Arrives some time
         // after appropriate read commands are presented on the command
         // interface.
 
-        output    [DATA_WDT-1:0] o_data,         // Data got from AHB is presented here.
-        output    [31:0]         o_addr,         // Corresponding address is presented here.
-        output                   o_dav           // Used as o_data valid indicator.
+        output logic   [DATA_WDT-1:0] o_data,         // Data got from AHB is presented here.
+        output logic   [31:0]         o_addr,         // Corresponding address is presented here.
+        output logic                  o_dav           // Used as o_data valid indicator.
 );
 
-wire [DATA_WDT-1:0] wr_data;      // Data to write.
-wire                wr_data_dav;  // Data to write valid.
-wire  [31:0]        addr;         // Base address of burst.
-t_hsize             size;         // Size of transfer i.e., hsize.
-wire                wr;           // Write to AHB bus.
-wire                rd;           // Read from AHB bus.
-wire [BEAT_WDT-1:0] min_len;      // Minimum guaranteed length of burst.
-wire                cont;         // From skid buffer to AHB master.
-wire                next;         // From AHB master core to skid buffer.
+logic [DATA_WDT-1:0] wr_data;      // Data to write.
+logic                wr_data_dav;  // Data to write valid.
+logic  [31:0]        addr;         // Base address of burst.
+t_hsize              size;         // Size of transfer i.e., hsize.
+logic                wr;           // Write to AHB bus.
+logic                rd;           // Read from AHB bus.
+logic [BEAT_WDT-1:0] min_len;      // Minimum guaranteed length of burst.
+logic                cont;         // From skid buffer to AHB master.
+logic                next;         // From AHB master core to skid buffer.
 
 ahb_master_skid_buffer
 #(

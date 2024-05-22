@@ -21,47 +21,47 @@
 module ahb_master import ahb_master_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
 
         // AHB
-        input                    i_hclk,
-        input                    i_hreset_n,
-        output    [31:0]         o_haddr,
-        output    t_hburst       o_hburst,
-        output    t_htrans       o_htrans,
-        output    [DATA_WDT-1:0] o_hwdata,
-        output                   o_hwrite,
-        output    t_hsize        o_hsize,
-        input     [DATA_WDT-1:0] i_hrdata,
-        input                    i_hready,
-        input     t_hresp        i_hresp,
-        input                    i_hgrant,
-        output reg               o_hbusreq,
+        input   logic                   i_hclk,
+        input   logic                   i_hreset_n,
+        output  logic [31:0]            o_haddr,
+        output  t_hburst                o_hburst,
+        output  t_htrans                o_htrans,
+        output  logic [DATA_WDT-1:0]    o_hwdata,
+        output  logic                   o_hwrite,
+        output  t_hsize                 o_hsize,
+        input   logic [DATA_WDT-1:0]    i_hrdata,
+        input   logic                   i_hready,
+        input   t_hresp                 i_hresp,
+        input   logic                   i_hgrant,
+        output  logic                   o_hbusreq,
 
         // UI
-        output                    o_next,   // UI must change only if this is 1.
-        input      [DATA_WDT-1:0] i_data,   // Data to write. Can change during burst if o_next = 1.
-        input                     i_dav,    // Data to write valid. Can change during burst if o_next = 1.
-        input       [31:0]        i_addr,   // Base address of burst.
-        input       t_hsize       i_size,   // Size of transfer. Like hsize.
-        input                     i_wr,     // Write to AHB bus.
-        input                     i_rd,     // Read from AHB bus.
-        input      [BEAT_WDT-1:0] i_min_len,// Minimum guaranteed length of burst.
-        input                     i_cont,   // Current transfer continues previous one.
-        output reg [DATA_WDT-1:0] o_data,   // Data got from AHB is presented here.
-        output reg [31:0]         o_addr,   // Corresponding address is presented here.
-        output reg                o_dav     // Used as o_data valid indicator.
+        output logic                o_next,   // UI must change only if this is 1.
+        input  logic [DATA_WDT-1:0] i_data,   // Data to write. Can change during burst if o_next = 1.
+        input  logic                i_dav,    // Data to write valid. Can change during burst if o_next = 1.
+        input  logic  [31:0]        i_addr,   // Base address of burst.
+        input  t_hsize              i_size,   // Size of transfer. Like hsize.
+        input  logic                i_wr,     // Write to AHB bus.
+        input  logic                i_rd,     // Read from AHB bus.
+        input  logic [BEAT_WDT-1:0] i_min_len,// Minimum guaranteed length of burst.
+        input  logic                i_cont,   // Current transfer continues previous one.
+        output logic [DATA_WDT-1:0] o_data,   // Data got from AHB is presented here.
+        output logic [31:0]         o_addr,   // Corresponding address is presented here.
+        output logic                o_dav     // Used as o_data valid indicator.
 );
 
-reg [4:0]                burst_ctr;
-reg [BEAT_WDT-1:0]       beat_ctr;
-reg [1:0]                gnt;
-t_hburst                 hburst;
-t_htrans                 htrans [2];
-t_hsize                  hsize  [2];
-reg [1:0]                hwrite;
-reg [1:0][DATA_WDT-1:0]  hwdata;
-reg [1:0][31:0]          haddr ;
-reg [BEAT_WDT-1:0]       beat;
-reg                      pend_split;
-wire [BEAT_WDT-1:0]      beat_ctr_sc, beat_ctr_nxt;
+logic [4:0]                burst_ctr;
+logic [BEAT_WDT-1:0]       beat_ctr;
+logic [1:0]                gnt;
+t_hburst                   hburst;
+t_htrans                   htrans [2];
+t_hsize                    hsize  [2];
+logic [1:0]                hwrite;
+logic [1:0][DATA_WDT-1:0]  hwdata;
+logic [1:0][31:0]          haddr ;
+logic [BEAT_WDT-1:0]       beat;
+logic                      pend_split;
+logic [BEAT_WDT-1:0]       beat_ctr_sc, beat_ctr_nxt;
 
 wire spl_ret_cyc_1   = gnt[1] & ~i_hready & (i_hresp == SPLIT || i_hresp == RETRY);
 wire rd_wr           = i_rd | (i_wr & i_dav);

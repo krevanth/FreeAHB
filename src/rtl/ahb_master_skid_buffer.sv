@@ -19,12 +19,12 @@
 // SOFTWARE.
 
 module ahb_master_skid_buffer #(parameter WDT=32) (
-    input                i_clk,
-    input                i_resetn,
-    input   [WDT-1:0]    i_data,
-    output               o_stall,
-    output  [WDT-1:0]    o_data,
-    input                i_stall
+    input   logic              i_clk,
+    input   logic              i_resetn,
+    input   logic [WDT-1:0]    i_data,
+    output  logic              o_stall,
+    output  logic [WDT-1:0]    o_data,
+    input   logic              i_stall
 );
 
 logic           stall;
