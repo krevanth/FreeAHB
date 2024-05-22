@@ -12,10 +12,7 @@ All of the FreeAHB test code is **Copyright (C) 2017-2024 by [Revanth Kamaraj](h
 
 ## Notice
 
-This is the official FreeAHB repo. The repository provides an AHB 2.0 Manager
-which supports the AHB protocol standard 2.0 including SPLIT/RETRY support.
-Please note that WRAP type transfer is not supported i.e., the AHB manager
-cannot issue WRAP transfers.
+This is the official FreeAHB repo. The repository provides an AHB 2.0 Manager.
 
 ### What happened to the repo and it's forks ?
 
