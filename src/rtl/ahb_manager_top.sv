@@ -53,10 +53,9 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32, pa
         output logic                  o_stall,        // All UI inputs stalled when 1.
         input  logic                  i_idle,         // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
         input  logic   [DATA_WDT-1:0] i_wr_data,      // Data to write. Can change throughout write burst.
-        input  logic                  i_wr_data_dav,  // Data to write valid (Can be gapped to pause writes).
         input  logic    [31:0]        i_addr,         // Base address of burst. HTB.
         input  t_hsize                i_size,         // Size of transfer i.e., hsize. HTB.
-        input  logic                  i_wr,           // Write to AHB bus. HTB.
+        input  logic                  i_wr,           // Write to AHB bus.  (Can be gapped to pause writes).
         input  logic                  i_rd,           // Read from AHB bus. (Can be gapped to pause reads).
         input  logic   [BEAT_WDT-1:0] i_min_len,      // Minimum guaranteed length of burst i.e., beats. HTB.
         input  logic                  i_first_xfer,   // Initiate a new burst. Make 0 on subsequent beats.
@@ -71,7 +70,6 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32, pa
 );
 
 logic [DATA_WDT-1:0] wr_data;      // Data to write.
-logic                wr_data_dav;  // Data to write valid.
 logic  [31:0]        addr;         // Base address of burst.
 t_hsize              size;         // Size of transfer i.e., hsize.
 logic                wr;           // Write to AHB bus.
@@ -80,19 +78,21 @@ logic [BEAT_WDT-1:0] min_len;      // Minimum guaranteed length of burst.
 logic                cont;         // From skid buffer to AHB manager.
 logic                next;         // From AHB manager core to skid buffer.
 
+// Skid buffer for UI signals.
 ahb_manager_skid_buffer
 #(
-    .WDT(DATA_WDT + BEAT_WDT + 39)
+    .WDT(DATA_WDT + BEAT_WDT + 38)
 ) u_skid_buffer (
     .i_clk(i_hclk),
     .i_resetn(i_hreset_n),
-    .i_data({i_wr_data, i_wr_data_dav, i_addr, i_size, i_wr & ~i_idle,i_rd & ~i_idle,
+    .i_data({i_wr_data, i_addr, i_size, i_wr & ~i_idle,i_rd & ~i_idle,
              i_min_len, ~(i_idle|i_first_xfer)}),
     .o_stall(o_stall),
-    .o_data({wr_data,wr_data_dav,addr,size,wr,rd,min_len,cont}),
+    .o_data({wr_data, addr,size,wr,rd,min_len,cont}),
     .i_stall(~next)
 );
 
+// AHB manager core.
 ahb_manager
 #(
     .DATA_WDT(DATA_WDT),
@@ -112,7 +112,6 @@ ahb_manager
     .i_hgrant(i_hgrant),
     .o_hbusreq(o_hbusreq),
     .i_data(wr_data),
-    .i_dav(wr_data_dav),
     .i_addr(addr),
     .i_size(size),
     .i_wr(wr),

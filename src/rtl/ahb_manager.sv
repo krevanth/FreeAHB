@@ -38,7 +38,6 @@ module ahb_manager import ahb_manager_pack::*; #(parameter DATA_WDT = 32, parame
         // UI
         output logic                o_next,   // UI must change only if this is 1.
         input  logic [DATA_WDT-1:0] i_data,   // Data to write. Can change during burst if o_next = 1.
-        input  logic                i_dav,    // Data to write valid. Can change during burst if o_next = 1.
         input  logic  [31:0]        i_addr,   // Base address of burst.
         input  t_hsize              i_size,   // Size of transfer. Like hsize.
         input  logic                i_wr,     // Write to AHB bus.
@@ -64,7 +63,7 @@ logic                      pend_split;
 logic [BEAT_WDT-1:0]       beat_ctr_sc, beat_ctr_nxt;
 
 wire spl_ret_cyc_1   = gnt[1] & ~i_hready & (i_hresp == SPLIT || i_hresp == RETRY);
-wire rd_wr           = i_rd | (i_wr & i_dav);
+wire rd_wr           = i_rd | i_wr;
 wire b1k_spec        = (haddr[0] + ('d1 << i_size)) >> 'd10 != {10'd0, haddr[0][31:10]};
 wire term_bc         = (burst_ctr == 'd1) & (o_hburst != INCR);
 wire first_xfer      = ~i_cont & rd_wr;
@@ -73,7 +72,7 @@ wire rcmp_brst_sc    = |{first_xfer, ~gnt[0], term_bc, htrans_idle, b1k_spec};
 wire rcmp_brst       = (htrans[0] != BUSY) & rcmp_brst_sc;
 wire [31:0] addr_arg = ~i_cont ? i_addr : haddr[0] + ({31'd0, rd_wr} << i_size);
 wire ui_idle         = ~i_cont & ~i_rd & ~i_wr;
-assign o_next        = ( i_hready & i_hgrant & ~pend_split ) | ui_idle | ( i_wr & ~i_dav );
+assign o_next        = ( i_hready & i_hgrant & ~pend_split ) | ui_idle;
 assign beat_ctr_sc   = (hburst == INCR ? beat_ctr : (beat_ctr - (rd_wr ? 'd1 : 'd0)));
 assign beat_ctr_nxt  = ~i_cont ? i_min_len : beat_ctr_sc;
 

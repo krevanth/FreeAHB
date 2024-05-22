@@ -40,7 +40,6 @@ logic                  i_hgrant;
 logic                  o_hbusreq;
 logic                  o_next;   // UI must change only if this is 1.
 logic   [DATA_WDT-1:0] i_data;   // Data to write. Can change during burst if o_next = 1.
-bit                    i_dav;    // Data to write valid. Can change during burst if o_next = 1.
 bit      [31:0]        i_addr;   // Base address of burst.
 t_hsize                i_size = W8;     // Size of transfer. Like hsize.
 bit                    i_wr;     // Write to AHB bus.
@@ -109,7 +108,7 @@ assign hwdata0 = U_AHB_MASTER.o_hwdata[0];
 assign hwdata1 = U_AHB_MASTER.o_hwdata[1];
 
 ahb_manager_top #(.DATA_WDT(DATA_WDT), .BEAT_WDT(BEAT_WDT)) U_AHB_MASTER
-(.*, .i_wr_data(i_data), .i_wr_data_dav(i_dav), .o_stall(stall_tmp), .i_first_xfer(i_first_xfer));
+(.*, .i_wr_data(i_data), .o_stall(stall_tmp), .i_first_xfer(i_first_xfer));
 
 ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT)) U_AHB_SLAVE_SIM_1 (
 
@@ -171,7 +170,6 @@ begin
             i_wr          <= i == 0 ? 1'd1 : 1'd0;
             i_rd          <= i == 0 ? 1'd0 : 1'd1;
             i_first_xfer  <= 1'd1; // First txn.
-            i_dav         <= i == 0 ? 1'd1 : 1'd0; // First UI of a write burst must have valid data.
             i_data        <= i == 0 ? 0 : 'dx;     // First data is 0.
             i_idle        <= 1'd0;
 
@@ -189,7 +187,7 @@ begin
 
                     if ( i == 0 )
                     begin
-                        i_dav     <= dav;
+                        i_wr      <= dav;
                         i_data    <= dav ? dat : 32'dx;
                     end
                     else i_rd <= $random;
