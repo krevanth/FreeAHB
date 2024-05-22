@@ -20,6 +20,19 @@
 
 .PHONY: sim clean lint
 
+waves: obj/ahb_master.vcd 
+	gtkwave obj/ahb_master.vcd	
+
+sim: obj/ahb_master.vcd
+
+clean:
+	rm -rf obj
+
+lint:
+	verilator --lint-only src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv \
+    src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv
+	svlint src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv 
+
 obj/ahb_master.vcd: obj/ahb_master.out
 	cd obj ; ./ahb_master.out
 
@@ -28,13 +41,3 @@ obj/ahb_master.out: src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb
 	iverilog -g2012 src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv \
     src/testbench/tb.sv -o obj/ahb_master.out
 
-clean:
-	rm -rf obj
-
-sim: obj/ahb_master.vcd 
-	gtkwave obj/ahb_master.vcd	
-
-lint:
-	verilator --lint-only src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv \
-    src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv
-	svlint src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv 
