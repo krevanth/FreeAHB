@@ -1,6 +1,6 @@
 # FreeAHB
 
-Copyright (C) 2017-2024 by Revanth Kamaraj (revanth91kamaraj@gmail.com)
+All of the FreeAHB codebase is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
