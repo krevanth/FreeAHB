@@ -20,31 +20,34 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## About
+## Notice
 
 This is the official FreeAHB repo. The repository provides an AHB 2.0 Master 
 which supports the AHB protocol standard 2.0 including SPLIT/RETRY support. 
 Please note that WRAP type transfer is not supported i.e., the AHB master 
 cannot issue WRAP transfers.
 
-## What happened to the repo and it's forks ?
+### What happened to the repo and it's forks ?
 
 The repo https://github.com/krevanth/freeahb was detached from its forks (as 
 an unintended consequence) when the repo was made private and was then deleted 
-from GitHub. The repo has now been restored at the same URL as before i.e., 
-https://github.com/krevanth/freeahb and those who have forked the repo before 
-are encouraged to make a new fork based on https://github.com/krevanth/freeahb. 
-Apologies for the inconvenience caused.
+from GitHub. The repo has now been restored from a combination of local backups
+and downstream forks (i.e., online backups) and is now at the same URL as 
+before i.e., https://github.com/krevanth/freeahb and those who have forked the 
+repo before are encouraged to make a new fork based on 
+https://github.com/krevanth/freeahb. Apologies for the inconvenience caused.
 
 Unfortunately, the issue history and the list of the repo's forks could not be 
 restored.
 
 ## Installing Tools
+
 `sudo apt install iverilog verilator cargo gtkwave`
 
 `cargo install svlint`
 
 ## Make Targets
+
 `make sim` will run the included test and open the VCD in GTKWave. Simulation 
 files are created in the `obj` directory.
 
@@ -53,7 +56,10 @@ files are created in the `obj` directory.
 `make lint` will run linting on the RTL.
 
 ## How to Use
+
 The file `ahb_master_top.sv` is the top level AHB master module. Please compile 
 all the files in `src/rtl` in order to use the AHB master. Instructions to use 
-the UI are included in the header comments of the top module.
+the UI are included in the `ahb_master_top.sv` file near the UI ports itself. 
+Running the provided testcase will provide a sample illustration of how the UI
+should be used.
 
