@@ -1,4 +1,4 @@
-# FreeAHB : An AHB 2.0 Master
+# FreeAHB : An AHB 2.0 Manager
 
 All of the FreeAHB codebase is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
 
