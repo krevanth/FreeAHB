@@ -18,9 +18,9 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 //
-// AHB master that implements all 2.0 features except WRAP transfers.
+// AHB manager that implements all 2.0 features except WRAP transfers.
 
-module ahb_master_top import ahb_master_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
+module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
 
         // ---------------------------
         // AHB interface.
@@ -77,10 +77,10 @@ t_hsize              size;         // Size of transfer i.e., hsize.
 logic                wr;           // Write to AHB bus.
 logic                rd;           // Read from AHB bus.
 logic [BEAT_WDT-1:0] min_len;      // Minimum guaranteed length of burst.
-logic                cont;         // From skid buffer to AHB master.
-logic                next;         // From AHB master core to skid buffer.
+logic                cont;         // From skid buffer to AHB manager.
+logic                next;         // From AHB manager core to skid buffer.
 
-ahb_master_skid_buffer
+ahb_manager_skid_buffer
 #(
     .WDT(DATA_WDT + BEAT_WDT + 39)
 ) u_skid_buffer (
@@ -93,11 +93,11 @@ ahb_master_skid_buffer
     .i_stall(~next)
 );
 
-ahb_master
+ahb_manager
 #(
     .DATA_WDT(DATA_WDT),
     .BEAT_WDT(BEAT_WDT)
-) u_ahb_master (
+) u_ahb_manager (
     .i_hclk(i_hclk),
     .i_hreset_n(i_hreset_n),
     .o_haddr(o_haddr),
@@ -125,4 +125,4 @@ ahb_master
     .o_dav(o_dav)
 );
 
-endmodule : ahb_master_top
+endmodule : ahb_manager_top

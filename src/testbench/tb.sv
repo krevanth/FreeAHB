@@ -20,7 +20,7 @@
 
 module tb;
 
-import ahb_master_pack::*;
+import ahb_manager_pack::*;
 
 parameter DATA_WDT = 32;
 parameter BEAT_WDT = 32;
@@ -108,10 +108,10 @@ assign o_next  = ~stall_tmp;
 assign hwdata0 = U_AHB_MASTER.o_hwdata[0];
 assign hwdata1 = U_AHB_MASTER.o_hwdata[1];
 
-ahb_master_top #(.DATA_WDT(DATA_WDT), .BEAT_WDT(BEAT_WDT)) U_AHB_MASTER
+ahb_manager_top #(.DATA_WDT(DATA_WDT), .BEAT_WDT(BEAT_WDT)) U_AHB_MASTER
 (.*, .i_wr_data(i_data), .i_wr_data_dav(i_dav), .o_stall(stall_tmp), .i_first_xfer(i_first_xfer));
 
-ahb_slave_sim   #(.DATA_WDT(DATA_WDT)) U_AHB_SLAVE_SIM_1 (
+ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT)) U_AHB_SLAVE_SIM_1 (
 
 .i_hclk         (i_hclk),
 .i_hreset_n     (i_hreset_n),
@@ -142,7 +142,7 @@ end
 
 initial
 begin
-        $dumpfile("ahb_master.vcd");
+        $dumpfile("ahb_manager.vcd");
         $dumpvars;
 
         // Set IDLE for some time.
@@ -240,7 +240,7 @@ endtask
 
 endmodule
 
-module ahb_slave_sim #(parameter DATA_WDT = 32, parameter MEM_SIZE=256) (
+module ahb_subordinate_sim #(parameter DATA_WDT = 32, parameter MEM_SIZE=256) (
 
 input                   i_hclk,
 input                   i_hreset_n,

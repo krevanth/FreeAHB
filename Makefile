@@ -20,24 +20,24 @@
 
 .PHONY: sim clean lint
 
-waves: obj/ahb_master.vcd 
-	gtkwave obj/ahb_master.vcd	
+waves: obj/ahb_manager.vcd 
+	gtkwave obj/ahb_manager.vcd	
 
-sim: obj/ahb_master.vcd
+sim: obj/ahb_manager.vcd
 
 clean:
 	rm -rf obj
 
 lint:
-	verilator --lint-only src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv \
-    src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv
-	svlint src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv 
+	verilator --lint-only src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \
+    src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv
+	svlint src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv 
 
-obj/ahb_master.vcd: obj/ahb_master.out
-	cd obj ; ./ahb_master.out
+obj/ahb_manager.vcd: obj/ahb_manager.out
+	cd obj ; ./ahb_manager.out
 
-obj/ahb_master.out: src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv src/testbench/tb.sv
+obj/ahb_manager.out: src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv src/testbench/tb.sv
 	mkdir -p obj
-	iverilog -g2012 src/rtl/ahb_master_pack.sv src/rtl/ahb_master.sv src/rtl/ahb_master_top.sv src/rtl/ahb_master_skid_buffer.sv \
-    src/testbench/tb.sv -o obj/ahb_master.out
+	iverilog -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv \
+    src/testbench/tb.sv -o obj/ahb_manager.out
 

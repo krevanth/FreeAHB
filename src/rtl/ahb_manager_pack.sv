@@ -18,27 +18,11 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-module ahb_master_skid_buffer #(parameter WDT=32) (
-    input   logic              i_clk,
-    input   logic              i_resetn,
-    input   logic [WDT-1:0]    i_data,
-    output  logic              o_stall,
-    output  logic [WDT-1:0]    o_data,
-    input   logic              i_stall
-);
+package ahb_manager_pack;
 
-logic           stall;
-logic [WDT-1:0] data_ff;
+typedef enum logic [2:0] {SINGLE, INCR=3'd1, INCR4=3'd3, INCR8=3'd5, INCR16=3'd7} t_hburst;
+typedef enum logic [1:0] {IDLE, BUSY, NONSEQ, SEQ}                                t_htrans;
+typedef enum logic [2:0] {W8, W16, W32, W64, W128, W256, W512, W1024}             t_hsize;
+typedef enum logic [1:0] {OKAY, ERROR, SPLIT, RETRY}                              t_hresp;
 
-always_ff @ (posedge i_clk or negedge i_resetn)
-    if(!i_resetn)    stall <= 1'd0;
-    else             stall <= i_stall;
-
-assign o_stall = stall;
-assign o_data  = stall ? data_ff : i_data;
-
-always_ff @ (posedge i_clk or negedge i_resetn)
-    if(!i_resetn)    data_ff <= 'd0;
-    else if (!stall) data_ff <= i_data;
-
-endmodule : ahb_master_skid_buffer
+endpackage : ahb_manager_pack

@@ -1,4 +1,4 @@
-# FreeAHB (AHB 2.0 Master)
+# FreeAHB (AHB 2.0 Manager)
 
 All of the FreeAHB codebase is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
 
@@ -22,9 +22,9 @@ SOFTWARE.
 
 ## Notice
 
-This is the official FreeAHB repo. The repository provides an AHB 2.0 Master 
+This is the official FreeAHB repo. The repository provides an AHB 2.0 Manager
 which supports the AHB protocol standard 2.0 including SPLIT/RETRY support. 
-Please note that WRAP type transfer is not supported i.e., the AHB master 
+Please note that WRAP type transfer is not supported i.e., the AHB manager 
 cannot issue WRAP transfers.
 
 ### What happened to the repo and it's forks ?
@@ -63,9 +63,9 @@ files are created in the `obj` directory.
 
 ## How to Use
 
-The file `ahb_master_top.sv` is the top level AHB master module. Please compile 
-all the files in `src/rtl` in order to use the AHB master. Instructions to use 
-the UI are included in the `ahb_master_top.sv` file near the UI ports itself. 
+The file `ahb_manager_top.sv` is the top level AHB manager module. Please compile 
+all the files in `src/rtl` in order to use the AHB manager. Instructions to use 
+the UI are included in the `ahb_manager_top.sv` file near the UI ports itself. 
 Running the provided testcase will provide a sample illustration of how the UI
 should be used.
 

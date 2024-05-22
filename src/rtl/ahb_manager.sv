@@ -18,7 +18,7 @@
 //  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //  SOFTWARE.
 
-module ahb_master import ahb_master_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
+module ahb_manager import ahb_manager_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
 
         // AHB
         input   logic                   i_hclk,
@@ -171,4 +171,4 @@ function automatic no_cross(input [31:0] addr, input [31:0] val, input [2:0] sz)
         no_cross = !( addr + (val << (1 << sz )) >> 10 != {10'd0, addr[31:10]} );
 endfunction
 
-endmodule : ahb_master
+endmodule : ahb_manager
