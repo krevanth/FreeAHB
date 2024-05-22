@@ -42,11 +42,17 @@ restored.
 
 ## Installing Tools
 
+The FreeAHB project requires several tools to be installed locally at your site.
+Please execute the following commands to install the required tools. The project
+assumes you are using a Linux based system.
+
 `sudo apt install iverilog verilator cargo gtkwave`
 
 `cargo install svlint`
 
 ## Make Targets
+
+Enter the project's root directory and enter one of the following commands:
 
 `make sim` will run the included test and open the VCD in GTKWave. Simulation 
 files are created in the `obj` directory.
