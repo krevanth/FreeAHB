@@ -1,4 +1,4 @@
-# FreeAHB : An AHB 2.0 Manager
+# FreeAHB : An AHB 2.0 Manager (https://github.com/krevanth/FreeAHB/)
 
 ## Authors
 
