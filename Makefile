@@ -26,7 +26,7 @@ waves: obj/ahb_manager.vcd
 sim: obj/ahb_manager.vcd
 
 clean:
-	rm -rf obj
+	rm -rfv obj
 
 lint:
 	verilator --lint-only src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \

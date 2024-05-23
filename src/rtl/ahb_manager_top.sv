@@ -88,14 +88,20 @@ logic                rd;           // Read from AHB bus.
 logic [15:0]         min_len;      // Minimum guaranteed length of burst.
 logic                first_xfer;   // From skid buffer to AHB manager.
 logic                next;         // From AHB manager core to skid buffer.
+logic                err;          // For assertion.
 
 `ifndef SYNTHESIS
+
     t_hsize              size_prev;           // For assertion.
     bit                  notstarted = 1'd1;   // For assertion.
 
     always @ (posedge i_hclk) // Assertion
     begin : assertion
+
         size_prev <= i_size;
+
+        if      (first_xfer) notstarted <= 1'd0;
+        else if (i_idle)     notstarted <= 1'd1;
 
         assert (~i_hreset_n | ~i_first_xfer | (i_first_xfer & (i_rd | i_wr)))
         else $fatal(2, "When first xfer=1, make either rd=1 or wr=1.");
@@ -112,9 +118,14 @@ logic                next;         // From AHB manager core to skid buffer.
             $fatal(2, "Keep i_idle=1 out of reset/in between burst sequences.");
         end
 
-        if      (first_xfer)       notstarted <= 1'd0;
-        else if (i_idle)           notstarted <= 1'd1;
+        assert (~i_hreset_n | ~err) else $fatal(2, "Internal overflow.");
+
     end : assertion
+
+`else
+
+wire unused = |{1'd1, err};
+
 `endif
 
 // Skid buffer for UI signals.
@@ -159,7 +170,8 @@ ahb_manager
     .o_next(next),
     .o_data(o_data),
     .o_addr(o_addr),
-    .o_dav(o_dav)
+    .o_dav(o_dav),
+    .o_err(err)
 );
 
 endmodule : ahb_manager_top

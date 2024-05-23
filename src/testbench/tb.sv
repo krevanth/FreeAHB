@@ -22,7 +22,13 @@
 
 // THIS IS TESTBENCH CODE. NOT FOR SYNTHESIS.
 
-module tb #(parameter DATA_WDT=32, MEM_SIZE=256);
+module tb;
+
+parameter DATA_WDT = 32;
+parameter MAX_LEN  = 8; // > MIN_LEN
+parameter MIN_LEN  = 4;
+
+localparam MEM_SIZE = MAX_LEN;
 
 import ahb_manager_pack::*;
 
@@ -106,26 +112,26 @@ logic [DATA_WDT-1:0] hwdata0, hwdata1;
 logic stall_tmp;
 
 assign o_next  = ~stall_tmp;
-assign hwdata0 = U_AHB_MASTER.o_hwdata[0];
-assign hwdata1 = U_AHB_MASTER.o_hwdata[1];
+assign hwdata0 = u_ahb_manager_top.o_hwdata[0];
+assign hwdata1 = u_ahb_manager_top.o_hwdata[1];
 
-ahb_manager_top #(.DATA_WDT(DATA_WDT)) U_AHB_MASTER
+ahb_manager_top #(.DATA_WDT(DATA_WDT)) u_ahb_manager_top
 (
     .*,
     .i_wr_data(i_data), .o_stall(stall_tmp),
     .i_first_xfer(i_first_xfer)
 );
 
-ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) U_AHB_SLAVE_SIM_1 (
+ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) u_ahb_sub_sim (
     .i_hclk         (i_hclk),
     .i_hreset_n     (i_hreset_n),
     .i_hburst       (o_hburst),
     .i_htrans       (o_htrans),
     .i_hwdata       (o_hwdata),
-    .i_hsel         (1'd1),
     .i_haddr        (o_haddr),
     .i_hwrite       (o_hwrite),
-    .i_hready       (1'd1),
+    .i_hgrant       (i_hgrant),
+
     .o_hrdata       (i_hrdata),
     .o_hready       (i_hready),
     .o_hresp        (i_hresp)
@@ -133,26 +139,23 @@ ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) U_AHB_SLAVE_SI
 
 always #10 i_hclk++;
 
-initial forever
+always @ (negedge i_hclk)
 begin
-        @ (posedge i_hclk);
-
-        if ( o_hbusreq )
-                i_hgrant <= $random;
-        else
-                i_hgrant <= 1'd0;
+    if(o_dav)
+        $display("Read Data = %x Read Address = %x", o_data, o_addr);
 end
 
-initial
-begin
+always @ (posedge i_hclk) i_hgrant <= o_hbusreq ? $random : 'd0; // Simulation Only.
+
+initial begin // Simulation Only.
         $dumpfile("ahb_manager.vcd");
         $dumpvars;
 
         // Set IDLE for some time.
-        i_rd         <= 0;
-        i_wr         <= 0;
+        i_rd         <= 'd0;
+        i_wr         <= 'd0;
         i_first_xfer <= 'd0;
-        i_idle       <= 1'd1;
+        i_idle       <= 'd1;
 
         // Reset
         i_hreset_n <= 1'd0;
@@ -164,26 +167,22 @@ begin
         // Write, then read.
         for(int i=0;i<2;i++)
         begin
+            wait_for_next;
 
-            dat = 0;
-            dav = 0;
-
-            // We can change inputs at any time.
-            // Starting a write burst.
-            i_min_len     <= 42;
+            {dat, dav}     = 0;
+            i_min_len     <= MIN_LEN;
             i_wr          <= i == 0 ? 1'd1 : 1'd0;
             i_rd          <= i == 0 ? 1'd0 : 1'd1;
             i_first_xfer  <= 1'd1; // First txn.
             i_data        <= i == 0 ? 0 : 'dx;     // First data is 0.
             i_idle        <= 1'd0;
 
-            // Further change requires o_next.
             wait_for_next;
 
             // Write to the unit as if reading from a FIFO with intermittent
             // FIFO empty conditions shown as dav = 0.
-            while(dat < 42)
-            begin: bk
+            while(dat < MAX_LEN - 1)
+            begin
                     dav = $random;
                     dat = dat + dav;
 
@@ -191,10 +190,15 @@ begin
 
                     if ( i == 0 )
                     begin
-                        i_wr      <= dav;
-                        i_data    <= dav ? dat : 32'dx;
+                        i_wr   <= dav;
+                        i_data <= dav ? dat : 32'dx;
                     end
-                    else i_rd <= $random;
+                    else
+                    begin
+                        i_rd   <= dav;
+                        i_wr   <= 'd0;
+                        i_data <= 'x;
+                    end
 
                     wait_for_next;
             end
@@ -210,8 +214,9 @@ begin
             d(10);
         end
 
-        d(10);
+        d(100);
 
+        $display("Normal end of sim");
         $finish;
 end
 
@@ -240,7 +245,9 @@ task d(int x);
         @(posedge i_hclk);
 endtask
 
-endmodule
+endmodule // tb
+
+///////////////////////////////////////////////////////////////////////////////
 
 module ahb_subordinate_sim
 
@@ -255,42 +262,101 @@ input                   i_hreset_n,
 input [2:0]             i_hburst,
 input [1:0]             i_htrans,
 input [31:0]            i_hwdata,
-input                   i_hsel,
 input [31:0]            i_haddr,
 input                   i_hwrite,
-output reg [31:0]       o_hrdata,
+input                   i_hgrant,
 
-input                   i_hready,
+output reg [31:0]       o_hrdata,
 output reg              o_hready,
-output    [1:0]         o_hresp
+output reg [1:0]        o_hresp
 
 );
 
-reg [7:0] mem [MEM_SIZE-1:0];
-reg [7:0]  mem_wr_data;
+reg [MEM_SIZE-1:0][7:0]      mem;
+reg [7:0]                    mem_wr_data;
 reg [MEM_SIZE-1:0]           mem_wr_en;
 reg [$clog2(MEM_SIZE)-1:0]   mem_wr_addr;
-reg write, read;
-reg [31:0] addr;
-reg [DATA_WDT-1:0] data;
+reg                          write;
+reg [31:0]                   addr;
+reg [DATA_WDT-1:0]           data;
+reg [2:0]                    rand_sel = 3'd0;
+t_htrans                     mode = IDLE;
+reg                          hready_int;
+bit                          tmp, sub_sel;
+t_htrans                     htrans;
 
-assign o_hresp = OKAY; // Always give OK response.
+wire [7:0] mem0 = mem[0];
+wire [7:0] mem1 = mem[1];
+wire [7:0] mem2 = mem[2];
+wire [7:0] mem3 = mem[3];
+wire [7:0] mem4 = mem[4];
+wire [7:0] mem5 = mem[5];
+wire [7:0] mem6 = mem[6];
+wire [7:0] mem7 = mem[7];
 
-initial forever
+assign htrans = i_htrans;
+
+always @ (posedge i_hclk) rand_sel <= $random % 8; // Simulation Only.
+
+always @ (posedge i_hclk) sub_sel  <=  ( i_hgrant & o_hready ) ? 1'd1 :
+                                       (~i_hgrant & o_hready ) ? 1'd0 : sub_sel;
+
+always @ (posedge i_hclk)
 begin
-        @(posedge i_hclk or negedge i_hreset_n);
+    if ( sub_sel & (o_hready | ( !o_hready && (o_hresp == SPLIT || o_hresp == RETRY) ) ) )
+    begin
+        if ( (htrans == IDLE || htrans == BUSY) && o_hready )
+        begin
+            o_hresp <= OKAY; // Always give OK response.
+            mode    <= htrans;
+        end
+        else if ( htrans == IDLE ) // o_hready == 1'd0
+        begin
+            o_hresp <= OKAY;
+            tmp     <= 1'd0;
+        end
+        else if ( htrans == SEQ || htrans == NONSEQ )
+        begin
+            mode <= htrans;
 
+            if ( (o_hresp == SPLIT || o_hresp == RETRY) && !o_hready )
+            begin
+                o_hresp <= o_hresp;
+                tmp     <= 1'd0;
+            end
+            else if ( o_hready )
+            begin
+                o_hresp <= rand_sel[1:0] == 'd0 ? OKAY  :
+                           rand_sel[1:0] == 'd1 ? ERROR :
+                           rand_sel[1:0] == 'd2 ? SPLIT : RETRY;
+
+                if ( rand_sel[1:0] == 'd2 || rand_sel[1:0] == 'd3 ) tmp <= 1'd1;
+            end
+        end
+    end
+end
+
+always @ (posedge i_hclk or negedge i_hreset_n)
+begin
         if ( !i_hreset_n )
         begin
-                read  <= 1'd0;
-                write <= 1'd0;
+            mem      <= 'x;
+            o_hrdata <= 'x;
+            write    <= '0;
         end
-        else if ( o_hready && i_hready )
+        else if ( o_hready )
         begin
-                if ( i_hsel && (i_htrans == SEQ || i_htrans == NONSEQ) )
+                if ( i_htrans == SEQ || i_htrans == NONSEQ )
                 begin
                         write <= i_hwrite;
                         addr  <= i_haddr;
+
+                        if ( !i_hwrite )
+                        begin
+                            o_hrdata <= mem [i_haddr];
+                            $display($time, ": %m :: Reading data %x from address %x",
+                            mem[i_haddr], i_haddr);
+                        end
                 end
                 else
                 begin
@@ -299,30 +365,13 @@ begin
         end
 end
 
-initial forever
-begin
-        @ (posedge i_hclk && !i_hwrite && o_hready && i_hready );
-
-        if ( i_hsel && (i_htrans == SEQ || i_htrans == NONSEQ) )
+always @ (posedge i_hclk)
+    for(int i=0;i<MEM_SIZE;i++)
+        if(mem_wr_en[i])
         begin
-                $display($time, "%m :: Reading data %x from address %x", mem[i_haddr], i_haddr);
-                o_hrdata <= mem [i_haddr];
+            mem[i] <= mem_wr_data;
+            $display($time, ": %m :: Writing data %x to address %x", mem_wr_data, i);
         end
-end
-
-initial forever
-begin
-        @ (posedge i_hclk);
-
-        for(int i=0;i<MEM_SIZE;i++)
-        begin
-            if ( mem_wr_en[i] )
-            begin
-                $display($time, "%m :: Writing data %x to address %x...", i_hwdata, addr);
-                mem [mem_wr_addr] <= mem_wr_data;
-            end
-        end
-end
 
 always @*
 begin
@@ -338,15 +387,17 @@ begin
         end
 end
 
-initial forever
+always @ (negedge i_hclk or negedge i_hreset_n)
 begin
-        @ (negedge i_hclk or negedge i_hreset_n);
-
         if ( !i_hreset_n )
-                o_hready <= 1'd0;
+                hready_int <= 1'd0;
         else
-                o_hready <= $random;
+                hready_int <= rand_sel[2];
 end
 
-endmodule // tb
+assign o_hready = sub_sel == 0 ? rand_sel[2] :
+                  ((o_hresp == SPLIT || o_hresp == RETRY) && tmp) ? 1'd0 :
+                  hready_int;
+
+endmodule // ahb_subordinate_sim
 
