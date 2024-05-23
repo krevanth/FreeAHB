@@ -1,3 +1,4 @@
+// ----------------------------------------------------------------------------
 // Copyright (C) 2017-2024 Revanth Kamaraj (krevanth)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,8 +20,9 @@
 // SOFTWARE.
 //
 // AHB manager that implements all 2.0 features except WRAP transfers.
+// ----------------------------------------------------------------------------
 
-module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32, parameter BEAT_WDT = 32) (
+module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
 
         // ---------------------------
         // AHB interface.
@@ -47,17 +49,26 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32, pa
         // User interface (Command). Do not change any of them throughout the
         // burst except i_first_xfer - that too only when o_stall = 0. Use
         // i_first_xfer=1 to signal start of a new burst. Again, note that
-        // this can be done only when o_stall = 0. Note HTB: Hold Through Burst.
-        // DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION.
+        // this can be done only when o_stall = 0.
+        //
+        // Note that HTB means Hold Throughout Burst. HF means should be valid
+        // for first beat i.e., when i_first_xfer=1.
+        //
+        // DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION. ONLY
+        // MAKE IT 1 AFTER ENTIRE BURST COMMAND SEQUENCE HAS COMPLETELY BEEN
+        // GIVEN TO THE UNIT. OUT OF RESET, KEEP I_IDLE=1 FOR AT LEAST
+        // 1 CYCLE.
+        //
+        // WHEN I_FIRST_XFER=1, YOU SHOULD HAVE EITHER RD=1 OR WR=1.
 
         output logic                  o_stall,        // All UI inputs stalled when 1.
         input  logic                  i_idle,         // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
         input  logic   [DATA_WDT-1:0] i_wr_data,      // Data to write. Can change throughout write burst.
-        input  logic    [31:0]        i_addr,         // Base address of burst. HTB.
+        input  logic    [31:0]        i_addr,         // Base address of burst. HF.
         input  t_hsize                i_size,         // Size of transfer i.e., hsize. HTB.
         input  logic                  i_wr,           // Write to AHB bus.  (Can be gapped to pause writes).
         input  logic                  i_rd,           // Read from AHB bus. (Can be gapped to pause reads).
-        input  logic   [BEAT_WDT-1:0] i_min_len,      // Minimum guaranteed length of burst i.e., beats. HTB.
+        input  logic   [15:0]         i_min_len,      // Minimum guaranteed length of burst i.e., beats. HF.
         input  logic                  i_first_xfer,   // Initiate a new burst. Make 0 on subsequent beats.
 
         // User Interface (Read Response) - Always in order. Arrives some time
@@ -74,29 +85,56 @@ logic  [31:0]        addr;         // Base address of burst.
 t_hsize              size;         // Size of transfer i.e., hsize.
 logic                wr;           // Write to AHB bus.
 logic                rd;           // Read from AHB bus.
-logic [BEAT_WDT-1:0] min_len;      // Minimum guaranteed length of burst.
-logic                cont;         // From skid buffer to AHB manager.
+logic [15:0]         min_len;      // Minimum guaranteed length of burst.
+logic                first_xfer;   // From skid buffer to AHB manager.
 logic                next;         // From AHB manager core to skid buffer.
+
+`ifndef SYNTHESIS
+    t_hsize              size_prev;           // For assertion.
+    bit                  notstarted = 1'd1;   // For assertion.
+
+    always @ (posedge i_hclk) // Assertion
+    begin : assertion
+        size_prev <= i_size;
+
+        assert (~i_hreset_n | ~i_first_xfer | (i_first_xfer & (i_rd | i_wr)))
+        else $fatal(2, "When first xfer=1, make either rd=1 or wr=1.");
+
+        if ( i_size != size_prev )
+        begin
+            assert(~i_hreset_n | i_first_xfer | i_idle) else
+            $fatal(2, "Keep i_size constant throughout burst sequence.");
+        end
+
+        if ( notstarted & ~first_xfer )
+        begin
+            assert(~i_hreset_n | i_idle) else
+            $fatal(2, "Keep i_idle=1 out of reset/in between burst sequences.");
+        end
+
+        if      (first_xfer)       notstarted <= 1'd0;
+        else if (i_idle)           notstarted <= 1'd1;
+    end : assertion
+`endif
 
 // Skid buffer for UI signals.
 ahb_manager_skid_buffer
 #(
-    .WDT(DATA_WDT + BEAT_WDT + 38)
+    .WDT(DATA_WDT + 16 + 38)
 ) u_skid_buffer (
     .i_clk(i_hclk),
     .i_resetn(i_hreset_n),
     .i_data({i_wr_data, i_addr, i_size, i_wr & ~i_idle,i_rd & ~i_idle,
-             i_min_len, ~(i_idle|i_first_xfer)}),
+             i_min_len, (i_idle | i_first_xfer)}),
     .o_stall(o_stall),
-    .o_data({wr_data, addr,size,wr,rd,min_len,cont}),
+    .o_data({wr_data, addr,size,wr,rd,min_len,first_xfer}),
     .i_stall(~next)
 );
 
 // AHB manager core.
 ahb_manager
 #(
-    .DATA_WDT(DATA_WDT),
-    .BEAT_WDT(BEAT_WDT)
+    .DATA_WDT(DATA_WDT)
 ) u_ahb_manager (
     .i_hclk(i_hclk),
     .i_hreset_n(i_hreset_n),
@@ -111,13 +149,13 @@ ahb_manager
     .i_hresp(i_hresp),
     .i_hgrant(i_hgrant),
     .o_hbusreq(o_hbusreq),
-    .i_data(wr_data),
+    .i_wr_data(wr_data),
     .i_addr(addr),
     .i_size(size),
     .i_wr(wr),
     .i_rd(rd),
     .i_min_len(min_len),
-    .i_cont(cont),
+    .i_first_xfer(first_xfer),
     .o_next(next),
     .o_data(o_data),
     .o_addr(o_addr),
@@ -125,3 +163,7 @@ ahb_manager
 );
 
 endmodule : ahb_manager_top
+
+// ----------------------------------------------------------------------------
+// END OF FILE
+// ----------------------------------------------------------------------------

@@ -32,6 +32,11 @@ restored.
 Other than WRAP transfers, all features of the AHB 2.0 specification are supported including
 SPLIT/RETRY capability.
 
+## Limitations
+
+- No support for SPLIT/RETRY capability.
+- Maximum burst command sequence length per burst is limited to 64K beats.
+
 ## License
 
 **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
@@ -62,8 +67,9 @@ SOFTWARE.
 - Running the provided testcase will provide a sample illustration of how the UI should be used.
 
 ### Parameters
-- DATA_WDT specifies the width of the data busses. This is 32 by default.
-- BEAT_WDT specifies the logarithm of maximum length of a burst command sequence. This is 32 by default i.e., 4 billion long burst command sequence is possible.
+
+`DATA_WDT` specifies the width of the data busses. This is 32 by default. You
+can specify upto 1024 here. Valid values are 32, 64, 128, 256, 512 and 1024.
 
 ### Ports
 
@@ -90,14 +96,14 @@ SOFTWARE.
 |Port         |IO   |Width   |Description                                                                                                                                                                                                    |
 |-------------|-----|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 |o_stall      |O    |1       |No UI signals (i_*) are allowed to change when this is 1.                                                                                                                                                      |
-|i_idle       |I    |1       |Use this to the signal to the UI that no burst is going on. Do not assert during an ongoing burst command sequence. Expected to be 1 after entire burst command sequence has been sent to the AHB manager.     |
+|i_idle       |I    |1       |Use this to the signal to the UI that no burst is going on. Do not assert during an ongoing burst command sequence. Expected to be 1 after entire burst command sequence has been sent to the AHB manager. Out of reset, keep i_idle=1 for atleast 1 cycle.     |
 |i_wr_data    |I    |DATA_WDT|Data to be written. May change every cycle during the burst command sequence.                                                                                                                                  |
 |i_addr       |I    |32      |Supply base address of the burst here. Should be held constant throughout the burst command sequence.                                                                                                          |
 |i_size       |I    |3       |Plays a similar role to HSIZE. Should be held constant through the burst command sequence.                                                                                                                     |
 |i_wr         |I    |1       |Indicates a write burst command sequnce. Can be gapped in the middle of the write burst command sequence to throttle i_wr_data getting into the AHB master.                                                    |
 |i_rd         |I    |1       |Indicates a read burst command sequence. Can be gapped in the middle of the read burst command sequence to pause read data coming out the AHB master.                                                          |
-|i_min_len    |I    |BEAT_WDT|Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer but cannot be shorter than this. Hold throughout the burst command sequence.                |
-|i_first_xfer |I    |1       |When new UI signals are setup for a new burst, make this 1 for the first beat. Make it 0 for the rest of the burst command sequence.                                                                           |
+|i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer but cannot be shorter than this. Hold throughout the burst command sequence.                |
+|i_first_xfer |I    |1       |When new UI signals are setup for a new burst, make this 1 for the first beat. Make it 0 for the rest of the burst command sequence. When 1, ensure i_rd=1 or i_wr=1.                                          |
 |o_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command: it can come after the read command sequence has been fed into the AHB master completely and i_idle=1 after the sequence.|
 |o_addr       |O    |32      |Associated address corresponding to the read data presented on the above port.                                                                                                                                 |
 |o_dav        |O    |1       |Qualifies the above two signals when 1.                                                                                                                                                                        |

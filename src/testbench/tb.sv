@@ -1,29 +1,32 @@
-//  Copyright (C) 2017 Revanth Kamaraj
+// ----------------------------------------------------------------------------
+// Copyright (C) 2017-2024 Revanth Kamaraj
 //
-//  Permission is hereby granted, free of charge, to any person obtaining a copy
-//  of this software and associated documentation files (the "Software"), to deal
-//  in the Software without restriction, including without limitation the rights
-//  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the Software is
-//  furnished to do so, subject to the following conditions:
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to deal
+// in the Software without restriction, including without limitation the rights
+// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+// copies of the Software, and to permit persons to whom the Software is
+// furnished to do so, subject to the following conditions:
 //
-//  The above copyright notice and this permission notice shall be included in all
-//  copies or substantial portions of the Software.
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
 //
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-//  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-//  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-//  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-//  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-//  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-//  SOFTWARE.
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+// SOFTWARE.
+// ----------------------------------------------------------------------------
 
-module tb;
+// THIS IS TESTBENCH CODE. NOT FOR SYNTHESIS.
+
+module tb #(parameter DATA_WDT=32, MEM_SIZE=256);
 
 import ahb_manager_pack::*;
 
-parameter DATA_WDT = 32;
-parameter BEAT_WDT = 32;
+localparam BEAT_WDT = 16;
 
 bit                    i_hclk;
 bit                    i_hreset_n;
@@ -38,21 +41,20 @@ logic                  i_hready;
 t_hresp                i_hresp;
 logic                  i_hgrant;
 logic                  o_hbusreq;
-logic                  o_next;   // UI must change only if this is 1.
-logic   [DATA_WDT-1:0] i_data;   // Data to write. Can change during burst if o_next = 1.
-bit      [31:0]        i_addr;   // Base address of burst.
-t_hsize                i_size = W8;     // Size of transfer. Like hsize.
-bit                    i_wr;     // Write to AHB bus.
-bit                    i_rd;     // Read from AHB bus.
-bit     [BEAT_WDT-1:0] i_min_len;// Minimum guaranteed length of burst.
+logic                  o_next;       // UI must change only if this is 1.
+logic   [DATA_WDT-1:0] i_data;       // Data to write. Can change during burst if o_next = 1.
+bit      [31:0]        i_addr;       // Base address of burst.
+t_hsize                i_size = W8;  // Size of transfer. Like hsize.
+bit                    i_wr;         // Write to AHB bus.
+bit                    i_rd;         // Read from AHB bus.
+bit     [BEAT_WDT-1:0] i_min_len;    // Minimum guaranteed length of burst.
 bit                    i_first_xfer; // First transfer.
 bit                    i_idle;
-logic[DATA_WDT-1:0]    o_data;   // Data got from AHB is presented here.
-logic[31:0]            o_addr;   // Corresponding address is presented here.
-logic                  o_dav;    // Used as o_data valid indicator.
+logic[DATA_WDT-1:0]    o_data;       // Data got from AHB is presented here.
+logic[31:0]            o_addr;       // Corresponding address is presented here.
+logic                  o_dav;        // Used as o_data valid indicator.
 bit                    dav;
 bit [31:0]             dat;
-
 
 `define STRING reg [256*8-1:0]
 
@@ -107,24 +109,26 @@ assign o_next  = ~stall_tmp;
 assign hwdata0 = U_AHB_MASTER.o_hwdata[0];
 assign hwdata1 = U_AHB_MASTER.o_hwdata[1];
 
-ahb_manager_top #(.DATA_WDT(DATA_WDT), .BEAT_WDT(BEAT_WDT)) U_AHB_MASTER
-(.*, .i_wr_data(i_data), .o_stall(stall_tmp), .i_first_xfer(i_first_xfer));
+ahb_manager_top #(.DATA_WDT(DATA_WDT)) U_AHB_MASTER
+(
+    .*,
+    .i_wr_data(i_data), .o_stall(stall_tmp),
+    .i_first_xfer(i_first_xfer)
+);
 
-ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT)) U_AHB_SLAVE_SIM_1 (
-
-.i_hclk         (i_hclk),
-.i_hreset_n     (i_hreset_n),
-.i_hburst       (o_hburst),
-.i_htrans       (o_htrans),
-.i_hwdata       (o_hwdata),
-.i_hsel         (1'd1),
-.i_haddr        (o_haddr),
-.i_hwrite       (o_hwrite),
-.i_hready       (1'd1),
-.o_hrdata       (i_hrdata),
-.o_hready       (i_hready),
-.o_hresp        (i_hresp)
-
+ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) U_AHB_SLAVE_SIM_1 (
+    .i_hclk         (i_hclk),
+    .i_hreset_n     (i_hreset_n),
+    .i_hburst       (o_hburst),
+    .i_htrans       (o_htrans),
+    .i_hwdata       (o_hwdata),
+    .i_hsel         (1'd1),
+    .i_haddr        (o_haddr),
+    .i_hwrite       (o_hwrite),
+    .i_hready       (1'd1),
+    .o_hrdata       (i_hrdata),
+    .o_hready       (i_hready),
+    .o_hresp        (i_hresp)
 );
 
 always #10 i_hclk++;
@@ -238,7 +242,13 @@ endtask
 
 endmodule
 
-module ahb_subordinate_sim #(parameter DATA_WDT = 32, parameter MEM_SIZE=256) (
+module ahb_subordinate_sim
+
+import ahb_manager_pack::*;
+
+#(parameter DATA_WDT = 32, parameter MEM_SIZE=256)
+
+(
 
 input                   i_hclk,
 input                   i_hreset_n,
@@ -256,41 +266,15 @@ output    [1:0]         o_hresp
 
 );
 
-localparam [1:0] IDLE   = 0;
-localparam [1:0] BUSY   = 1;
-localparam [1:0] NONSEQ = 2;
-localparam [1:0] SEQ    = 3;
-localparam [1:0] OKAY   = 0;
-localparam [1:0] ERROR  = 1;
-localparam [1:0] SPLIT  = 2;
-localparam [1:0] RETRY  = 3;
-localparam [2:0] SINGLE = 0; /* Unused. Done as a burst of 1. */
-localparam [2:0] INCR   = 1;
-localparam [2:0] WRAP4  = 2;
-localparam [2:0] INCR4  = 3;
-localparam [2:0] WRAP8  = 4;
-localparam [2:0] INCR8  = 5;
-localparam [2:0] WRAP16 = 6;
-localparam [2:0] INCR16 = 7;
-localparam [2:0] BYTE   = 0;
-localparam [2:0] HWORD  = 1;
-localparam [2:0] WORD   = 2; /* 32-bit */
-localparam [2:0] DWORD  = 3; /* 64-bit */
-localparam [2:0] BIT128 = 4;
-localparam [2:0] BIT256 = 5;
-localparam [2:0] BIT512 = 6;
-localparam [2:0] BIT1024 = 7;
-
 reg [7:0] mem [MEM_SIZE-1:0];
 reg [7:0]  mem_wr_data;
 reg [MEM_SIZE-1:0]           mem_wr_en;
 reg [$clog2(MEM_SIZE)-1:0]   mem_wr_addr;
-
 reg write, read;
 reg [31:0] addr;
 reg [DATA_WDT-1:0] data;
 
-assign o_hresp = OKAY;
+assign o_hresp = OKAY; // Always give OK response.
 
 initial forever
 begin
@@ -326,17 +310,23 @@ begin
         end
 end
 
-for(genvar i=0;i<MEM_SIZE;i++)
-    always @ (posedge i_hclk)
-        if ( mem_wr_en[i] )
+initial forever
+begin
+        @ (posedge i_hclk);
+
+        for(int i=0;i<MEM_SIZE;i++)
         begin
-            $display($time, "%m :: Writing data %x to address %x...", i_hwdata, addr);
-            mem [mem_wr_addr] <= mem_wr_data;
+            if ( mem_wr_en[i] )
+            begin
+                $display($time, "%m :: Writing data %x to address %x...", i_hwdata, addr);
+                mem [mem_wr_addr] <= mem_wr_data;
+            end
         end
+end
 
 always @*
 begin
-        mem_wr_en = 'd0;
+        mem_wr_en   = 'd0;
         mem_wr_data = 'd0;
         mem_wr_addr = 'd0;
 
@@ -358,5 +348,5 @@ begin
                 o_hready <= $random;
 end
 
-endmodule
+endmodule // tb
 

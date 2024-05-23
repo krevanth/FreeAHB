@@ -1,4 +1,5 @@
-// Copyright (C) 2017 Revanth Kamaraj
+// ----------------------------------------------------------------------------
+// Copyright (C) 2017-2024 Revanth Kamaraj
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -17,6 +18,7 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+// ----------------------------------------------------------------------------
 
 package ahb_manager_pack;
 
@@ -26,3 +28,7 @@ typedef enum logic [2:0] {W8, W16, W32, W64, W128, W256, W512, W1024}           
 typedef enum logic [1:0] {OKAY, ERROR, SPLIT, RETRY}                              t_hresp;
 
 endpackage : ahb_manager_pack
+
+// ----------------------------------------------------------------------------
+// END OF FILE
+// ----------------------------------------------------------------------------
