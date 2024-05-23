@@ -12,7 +12,7 @@ All of the FreeAHB test code is **Copyright (C) 2017-2024 by [Revanth Kamaraj](h
 
 ## Notice
 
-The repo https://github.com/krevanth/FreeAHB is the official FreeAHB repo. The repository provides an AHB 2.0 Manager.
+The repo https://github.com/krevanth/FreeAHB is the official, definitive and authoritative FreeAHB repo. The repository provides an AHB 2.0 Manager.
 
 ### What happened to the repo and it's forks ?
 
