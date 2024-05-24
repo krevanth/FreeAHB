@@ -46,6 +46,7 @@ module ahb_manager import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
         input  logic                 i_wr,         // Write to AHB bus. Qualifies i_wr_data.
         input  logic                 i_rd,         // Read from AHB bus.
         input  logic  [15:0]         i_min_len,    // Minimum guaranteed length of burst.
+        input  logic  [31:0]         i_mask,       // Keep 1, those bits of address you don't want changed.
         input  logic  [31:0]         i_addr,       // Base address of burst.
         input  t_hsize               i_size,       // Size of transfer. Like hsize.
         input  logic                 i_first_xfer, // First beat of new burst.
@@ -62,19 +63,27 @@ t_htrans                 htrans [3];
 t_hsize                  hsize  [3];
 logic                    hwrite [3];
 logic    [DATA_WDT-1:0]  hwdata [3];
+logic    [31:0]          mask   [3];
 logic    [DATA_WDT-1:0]  data_nxt;
 logic    [31:0]          haddr  [3];
-logic    [31:0]          addr_arg, addr_nxt;
-logic pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k, term_bc_no_incr,first_xfer,
-      rcmp_brst_sc, recompute_brst, hbusreq_nxt, ui_idle, clkena_st1, clkena_st2, clkena_st3, dav_nxt;
+logic    [31:0]          addr_arg, rd_addr_nxt, addr_nxt, addr_nxt_sc;
+logic                    pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k, term_bc_no_incr,first_xfer,
+                         nonburst, rcmp_brst_sc, recompute_brst, hbusreq_nxt, ui_idle, clkena_st1, clkena_st2,
+                         clkena_st3, dav_nxt;
 
+for(genvar i=0;i<32;i++) begin : l_addr_nxt
+    assign addr_nxt[i] = i_mask[i] ? haddr[0][i] : addr_nxt_sc[i];
+end : l_addr_nxt
+
+assign addr_nxt_sc     = haddr[0] + ({31'd0, (i_rd | i_wr)} << i_size);
 assign spl_ret_cyc_1   = gnt[0] & ~i_hready & (i_hresp == SPLIT || i_hresp == RETRY);
-assign boundary_1k     = (haddr[0] + ('d1 << i_size)) >> 'd10 != {10'd0, haddr[0][31:10]};
+assign boundary_1k     = addr_nxt >> 'd10 != {10'd0, haddr[0][31:10]};
+assign nonburst        = addr_nxt < addr_nxt_sc;
 assign term_bc_no_incr = (burst_ctr == 'd1) & (o_hburst != INCR);
 assign first_xfer      = i_first_xfer & (i_rd | i_wr);
-assign rcmp_brst_sc    = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans[0] == IDLE, boundary_1k};
+assign rcmp_brst_sc    = |{first_xfer,~gnt[0],term_bc_no_incr,htrans[0] == IDLE,boundary_1k,nonburst};
 assign recompute_brst  = (htrans[0] != BUSY) & rcmp_brst_sc;
-assign addr_arg        = i_first_xfer ? i_addr : haddr[0] + ({31'd0, (i_rd | i_wr)} << i_size);
+assign addr_arg        = i_first_xfer ? i_addr : addr_nxt_sc;
 assign ui_idle         = i_first_xfer & ~i_rd & ~i_wr;
 assign clkena_st1      =  spl_ret_cyc_1 | (i_hready & i_hgrant);
 assign clkena_st2      =  gnt[0] & i_hready;
@@ -90,68 +99,62 @@ assign gnt_nxt         = spl_ret_cyc_1 ? 2'd0 : i_hready ? {gnt[0], i_hgrant} : 
 assign hbusreq_nxt     = i_rd | i_wr | ~i_first_xfer | (htrans[1] != IDLE);
 assign pend_split_nxt  = spl_ret_cyc_1 ? 1'd1 : ((i_hready & i_hgrant) ? 1'd0 : pend_split);
 
-assign {dav_nxt, data_nxt, addr_nxt} = clkena_st3 ? {~hwrite[1], i_hrdata, haddr[1]} : {1'd0, o_data, o_addr};
+assign {dav_nxt, data_nxt, rd_addr_nxt} = clkena_st3 ?
+       {~hwrite[1], i_hrdata, haddr[1]} : {1'd0, o_data, o_addr};
 
 assign {o_haddr,  o_hburst,o_htrans,o_hwdata,   o_hwrite, o_hsize} =
-       {haddr[0], hburst,  htrans[0], hwdata[1],hwrite[0],hsize[0]};
+       {haddr[0], hburst,  htrans[0], hwdata[1],hwrite[0],hsize[0]}; // mask not required here.
 
 `FREEAHB_FF(gnt, gnt_nxt, 1'd1)
 `FREEAHB_FF(o_hbusreq, hbusreq_nxt, 1'd1)
-`FREEAHB_FF({hwdata[1], haddr[1], hwrite[1], hsize[1], htrans[1], beat},
-            {hwdata[0], haddr[0], hwrite[0], hsize[0], htrans[0], beat_ctr}, clkena_st2) // Stage 2 (HWDATA)
-`FREEAHB_FF({o_dav, o_data, o_addr}, {dav_nxt, data_nxt, addr_nxt}, 1'd1) // Stage 3 (HRDATA)
+`FREEAHB_FF({mask[1], hwdata[1], haddr[1], hwrite[1], hsize[1], htrans[1], beat},
+            {mask[0], hwdata[0], haddr[0], hwrite[0], hsize[0], htrans[0], beat_ctr}, clkena_st2) // Stage 2 (HWDATA)
+`FREEAHB_FF({o_dav, o_data, o_addr}, {dav_nxt, data_nxt, rd_addr_nxt}, 1'd1)                      // Stage 3 (HRDATA)
 
 // Stage 1 (ADDR)
 
 `FREEAHB_FF(pend_split, pend_split_nxt, clkena_st1)
 
 always_ff @ (posedge i_hclk or negedge i_hreset_n)
-    if ( !i_hreset_n )
-    begin
-       {hwdata[0], hwrite[0], hsize[0], hburst, beat_ctr, burst_ctr, htrans[0]} <= 'd0;
-       {hwdata[2], hwrite[2], hsize[2], htrans[2], beatx} <= 'd0;
+    if ( !i_hreset_n ) begin
+       {mask[0], hwdata[0], hwrite[0], hsize[0], hburst, beat_ctr, burst_ctr, htrans[0]} <= 'd0;
+       {mask[2], hwdata[2], hwrite[2], hsize[2], htrans[2], beatx}                       <= 'd0;
     end
-    else if ( clkena_st1 )
-    begin
-        if ( spl_ret_cyc_1 )
-        begin
-            if ( htrans[2] != SEQ && htrans[2] != NONSEQ )
-            begin
-                {hwdata[2], hwrite[2], hsize[2], haddr[2], htrans[2], beatx} <=
-                {hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], beat};
-            end
-
+    else if ( clkena_st1 ) begin
+        if ( spl_ret_cyc_1 ) begin
             htrans[0] <= IDLE;
-        end
-        else if ( pend_split ) // Perform pipeline rollback.
-        begin
-            {hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], beat_ctr} <=
-            {hwdata[1], hwrite[1], hsize[1], haddr[1], NONSEQ,    beat};
 
-            {hburst, burst_ctr} <= compute_hburst(beat[15:0], haddr[1], hsize[1]);
+            if ( htrans[2] != SEQ && htrans[2] != NONSEQ ) begin
+                {mask[2], hwdata[2], hwrite[2], hsize[2], haddr[2], htrans[2], beatx} <=
+                {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], beat};
+            end
         end
-        else if ( htrans[2] == SEQ || htrans[2] == NONSEQ ) // Restore original transaction.
-        begin
-            {hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], htrans[2], beat_ctr} <=
-            {hwdata[2], hwrite[2], hsize[2], haddr[2], NONSEQ,    IDLE,      beatx};
+        else if ( pend_split ) begin // Perform pipeline rollback.
+            {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], beat_ctr} <=
+            {mask[1], hwdata[1], hwrite[1], hsize[1], haddr[1], NONSEQ,    beat};
 
-            {hburst, burst_ctr} <= compute_hburst(beatx[15:0], haddr[2], hsize[2]);
+            {hburst, burst_ctr} <= compute_hburst(beat[15:0], haddr[1], hsize[1], mask[1]);
         end
-        else
-        begin
-            {hwdata[0], hwrite[0], hsize[0], htrans[2]} <= {i_wr_data, i_wr, i_size, IDLE};
+        else if ( htrans[2] == SEQ || htrans[2] == NONSEQ ) begin // Restore original transaction.
+            {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], htrans[0], htrans[2], beat_ctr} <=
+            {mask[2], hwdata[2], hwrite[2], hsize[2], haddr[2], NONSEQ,    IDLE,      beatx};
 
-            if ( ui_idle ) htrans[0] <= IDLE;
-            else if ( recompute_brst ) // Recompute burst properties
-            begin
-                haddr[0]            <= i_first_xfer ? i_addr : (haddr[0] + ({31'd0, (i_rd|i_wr)} << i_size));
+            {hburst, burst_ctr} <= compute_hburst(beatx[15:0], haddr[2], hsize[2], mask[2]);
+        end
+        else begin
+            {hwdata[0], hwrite[0], hsize[0], htrans[2], mask[0]} <= {i_wr_data, i_wr, i_size, IDLE, i_mask};
+
+            if ( ui_idle ) begin
+                htrans[0] <= IDLE;
+            end
+            else if ( recompute_brst ) begin // Recompute burst properties
+                haddr[0]            <= addr_arg;
                 htrans[0]           <= (i_rd | i_wr) ? NONSEQ : IDLE;
-                {hburst, burst_ctr} <= compute_hburst(beat_ctr_nxt[15:0], addr_arg, i_size );
+                {hburst, burst_ctr} <= compute_hburst(beat_ctr_nxt[15:0], addr_arg, i_size, i_mask);
                 beat_ctr            <= beat_ctr_nxt;
             end
-            else // We are in normal burst. No need to change HBURST.
-            begin
-                haddr[0]            <= haddr[0] + ((htrans[0] != BUSY ? 'd1 : 'd0) << i_size);
+            else begin // We are in normal burst. No need to change HBURST.
+                haddr[0]            <= (haddr[0] + ((htrans[0] != BUSY ? 'd1 : 'd0) << i_size));
                 htrans[0]           <= (i_rd | i_wr) ? SEQ : BUSY;
                 burst_ctr           <= burst_ctr_nxt;
                 beat_ctr            <= beat_ctr_sc;

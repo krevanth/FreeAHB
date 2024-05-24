@@ -51,6 +51,7 @@ logic                  o_next;       // UI must change only if this is 1.
 logic   [DATA_WDT-1:0] i_data;       // Data to write. Can change during burst if o_next = 1.
 bit      [31:0]        i_addr;       // Base address of burst.
 t_hsize                i_size = W8;  // Size of transfer. Like hsize.
+bit      [31:0]        i_mask;
 bit                    i_wr;         // Write to AHB bus.
 bit                    i_rd;         // Read from AHB bus.
 bit     [BEAT_WDT-1:0] i_min_len;    // Minimum guaranteed length of burst.
@@ -142,7 +143,10 @@ always #10 i_hclk++;
 always @ (negedge i_hclk)
 begin
     if(o_dav)
+    begin
         $display("Read Data = %x Read Address = %x", o_data, o_addr);
+        assert(o_data == o_addr) else $fatal(2, "Sim failed.");
+    end
 end
 
 always @ (posedge i_hclk) i_hgrant <= o_hbusreq ? $random : 'd0; // Simulation Only.

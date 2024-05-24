@@ -23,7 +23,8 @@
 waves: obj/ahb_manager.vcd 
 	gtkwave obj/ahb_manager.vcd	
 
-sim: obj/ahb_manager.vcd
+sim: obj/ahb_manager.out
+	cd obj ; ./ahb_manager.out
 
 clean:
 	rm -rfv obj

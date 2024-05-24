@@ -61,15 +61,16 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
         //
         // WHEN I_FIRST_XFER=1, YOU SHOULD HAVE EITHER RD=1 OR WR=1.
 
-        output logic                  o_stall,        // All UI inputs stalled when 1.
-        input  logic                  i_idle,         // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
-        input  logic   [DATA_WDT-1:0] i_wr_data,      // Data to write. Can change throughout write burst.
-        input  logic    [31:0]        i_addr,         // Base address of burst. HF.
-        input  t_hsize                i_size,         // Size of transfer i.e., hsize. HTB.
-        input  logic                  i_wr,           // Write to AHB bus.  (Can be gapped to pause writes).
-        input  logic                  i_rd,           // Read from AHB bus. (Can be gapped to pause reads).
-        input  logic   [15:0]         i_min_len,      // Minimum guaranteed length of burst i.e., beats. HF.
-        input  logic                  i_first_xfer,   // Initiate a new burst. Make 0 on subsequent beats.
+        output logic                  o_stall,      // All UI inputs stalled when 1.
+        input  logic                  i_idle,       // Make 1 to indicate NO ACTIVITY. Ignores rd, wr and first_xfer.
+        input  logic   [DATA_WDT-1:0] i_wr_data,    // Data to write. Can change throughout write burst.
+        input  logic   [31:0]         i_addr,       // Base address of burst. HF.
+        input  logic   [31:0]         i_mask,       // Bits that are 1 in address won't change. HTB.
+        input  t_hsize                i_size,       // Size of transfer i.e., hsize. HTB.
+        input  logic                  i_wr,         // Write to AHB bus.  (Can be gapped to pause writes).
+        input  logic                  i_rd,         // Read from AHB bus. (Can be gapped to pause reads).
+        input  logic   [15:0]         i_min_len,    // Minimum guaranteed length of burst i.e., beats. HF.
+        input  logic                  i_first_xfer, // Initiate a new burst. Make 0 on subsequent beats.
 
         // User Interface (Read Response) - Always in order. Arrives some time
         // after appropriate read commands are presented on the command
@@ -80,15 +81,16 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
         output logic                  o_dav           // Used as o_data valid indicator.
 );
 
-logic [DATA_WDT-1:0] wr_data;      // Data to write.
-logic  [31:0]        addr;         // Base address of burst.
-t_hsize              size;         // Size of transfer i.e., hsize.
-logic                wr;           // Write to AHB bus.
-logic                rd;           // Read from AHB bus.
-logic [15:0]         min_len;      // Minimum guaranteed length of burst.
-logic                first_xfer;   // From skid buffer to AHB manager.
-logic                next;         // From AHB manager core to skid buffer.
-logic                err;          // For assertion.
+logic [DATA_WDT-1:0] wr_data;    // Data to write.
+logic  [31:0]        addr;       // Base address of burst.
+t_hsize              size;       // Size of transfer i.e., hsize.
+logic                wr;         // Write to AHB bus.
+logic                rd;         // Read from AHB bus.
+logic [15:0]         min_len;    // Minimum guaranteed length of burst.
+logic                first_xfer; // From skid buffer to AHB manager.
+logic                next;       // From AHB manager core to skid buffer.
+logic [31:0]         mask;
+logic                err;        // For assertion.
 
 `ifndef SYNTHESIS
 
@@ -131,14 +133,14 @@ wire unused = |{1'd1, err};
 // Skid buffer for UI signals.
 ahb_manager_skid_buffer
 #(
-    .WDT(DATA_WDT + 16 + 38)
+    .WDT(DATA_WDT + 86)
 ) u_skid_buffer (
     .i_clk(i_hclk),
     .i_resetn(i_hreset_n),
     .i_data({i_wr_data, i_addr, i_size, i_wr & ~i_idle,i_rd & ~i_idle,
-             i_min_len, (i_idle | i_first_xfer)}),
+             i_min_len, (i_idle | i_first_xfer), i_mask}),
     .o_stall(o_stall),
-    .o_data({wr_data, addr,size,wr,rd,min_len,first_xfer}),
+    .o_data({wr_data, addr,size,wr,rd,min_len,first_xfer, mask}),
     .i_stall(~next)
 );
 
@@ -163,6 +165,7 @@ ahb_manager
     .i_wr_data(wr_data),
     .i_addr(addr),
     .i_size(size),
+    .i_mask(mask),
     .i_wr(wr),
     .i_rd(rd),
     .i_min_len(min_len),
