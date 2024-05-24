@@ -47,14 +47,6 @@ https://github.com/krevanth/FreeAHB. Apologies for the inconvenience caused.
 Unfortunately, the issue history and the list of the repo's forks could not be
 restored.
 
-## Compatibility
-
-All features of the AHB 2.0 manager protocol are supported.
-
-## Limitations
-
-No limitations.
-
 ## System Integration
 
 - The file `ahb_manager_top.sv` is the top level AHB manager module.
