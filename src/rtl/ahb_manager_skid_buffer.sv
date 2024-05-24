@@ -1,5 +1,5 @@
 // ----------------------------------------------------------------------------
-// Copyright (C) 2017-2024 Revanth Kamaraj
+// Copyright (C) 2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,9 +20,9 @@
 // SOFTWARE.
 // ----------------------------------------------------------------------------
 
-module ahb_manager_skid_buffer #(parameter WDT=32) (
-    input   logic              i_clk,
-    input   logic              i_resetn,
+module ahb_manager_skid_buffer import ahb_manager_pack::*; #(parameter WDT=32) (
+    input   logic              i_hclk,
+    input   logic              i_hreset_n,
     input   logic [WDT-1:0]    i_data,
     output  logic              o_stall,
     output  logic [WDT-1:0]    o_data,
@@ -32,16 +32,11 @@ module ahb_manager_skid_buffer #(parameter WDT=32) (
 logic           stall;
 logic [WDT-1:0] data_ff;
 
-always_ff @ (posedge i_clk or negedge i_resetn)
-    if(!i_resetn)    stall <= 1'd0;
-    else             stall <= i_stall;
+`FREEAHB_FF(stall, i_stall, 1'd1)
+`FREEAHB_FF(data_ff, i_data, ~stall)
 
 assign o_stall = stall;
 assign o_data  = stall ? data_ff : i_data;
-
-always_ff @ (posedge i_clk or negedge i_resetn)
-    if(!i_resetn)    data_ff <= 'd0;
-    else if (!stall) data_ff <= i_data;
 
 endmodule : ahb_manager_skid_buffer
 

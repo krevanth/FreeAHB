@@ -1,4 +1,4 @@
-#  Copyright (C) 2017-2024 Revanth Kamaraj
+#  Copyright (C) 2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal
@@ -32,13 +32,17 @@ clean:
 lint:
 	verilator --lint-only src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \
     src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv
-	svlint src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv 
+	svlint src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv \
+    src/rtl/ahb_manager_skid_buffer.sv 
+	iverilog -Wall -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv \
+    src/rtl/ahb_manager_skid_buffer.sv -o /dev/null
 
 obj/ahb_manager.vcd: obj/ahb_manager.out
 	cd obj ; ./ahb_manager.out
 
 obj/ahb_manager.out: src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv src/testbench/tb.sv
 	mkdir -p obj
-	iverilog -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv \
+	iverilog -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \
+    src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv \
     src/testbench/tb.sv -o obj/ahb_manager.out
 

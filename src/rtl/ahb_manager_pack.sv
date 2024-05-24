@@ -1,5 +1,5 @@
 // ----------------------------------------------------------------------------
-// Copyright (C) 2017-2024 Revanth Kamaraj
+// Copyright (C) 2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,7 +31,8 @@ function automatic logic [8:0] compute_hburst
 (logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] mask);
     compute_hburst = ((|val[15:4]) & ~bcross(addr, 'd15, sz, mask)) ? {INCR16, 6'd16} :
                      ((|val[15:3]) & ~bcross(addr, 'd7,  sz, mask)) ? {INCR8 , 6'd8}  :
-                     ((|val[15:2]) & ~bcross(addr, 'd3,  sz, mask)) ? {INCR4 , 6'd4}  : {INCR, 6'd0};
+                     ((|val[15:2]) & ~bcross(addr, 'd3,  sz, mask)) ? {INCR4 , 6'd4}  :
+                                                                      {INCR  , 6'd0};
 endfunction
 
 function automatic logic bcross
@@ -43,7 +44,7 @@ function automatic logic bcross
         laddr[1][i] = mask[i] ? addr[i] : laddr[0][i];
     end
 
-    bcross = ( laddr[1] >> 10 != {10'd0, addr[31:10]} ) | ( laddr[1] < addr );
+    bcross = ( laddr[1][31:10] != addr[31:10] ) | ( laddr[1] < addr );
 endfunction
 
 `ifndef __FREEAHB_DEFINES__
@@ -53,7 +54,11 @@ endfunction
     always @ (posedge i_hclk or negedge i_hreset_n) \
     if(!i_hreset_n) Q <= '0; else Q <= EN ? D : Q;
 
+    `define FREEAHB_ASSERT(Y,X) \
+    always @ (posedge i_hclk) assert(X) else $fatal(2, "TEST FAILED. CODE=%d", Y);
+
 `endif
+
 endpackage : ahb_manager_pack
 
 // ----------------------------------------------------------------------------
