@@ -113,11 +113,11 @@ assumes you are using a Linux based system.
 
 Enter the project's root directory and enter one of the following commands:
 
-`make sim` will run the included test and open the VCD in GTKWave. Simulation 
-files are created in the `obj` directory.
+`make sim` will run the included test and generate a VCD file.
 
-`make clean` will remove the `obj` directory created due to the above.
+`make waves' will open the VCD in GTKWave.
 
-`make lint` will run linting on the RTL.
+`make clean` will remove the `obj` directory.
 
+`make lint` will run linting on the RTL using Verilator and SVLint.
 
