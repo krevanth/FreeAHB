@@ -76,9 +76,9 @@ module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
         // after appropriate read commands are presented on the command
         // interface.
 
-        output logic   [DATA_WDT-1:0] o_data,         // Data got from AHB is presented here.
-        output logic   [31:0]         o_addr,         // Corresponding address is presented here.
-        output logic                  o_dav           // Used as o_data valid indicator.
+        output logic   [DATA_WDT-1:0] o_rd_data,      // Data got from AHB is presented here.
+        output logic   [31:0]         o_rd_data_addr, // Corresponding address is presented here.
+        output logic                  o_rd_data_dav   // Used as o_rd_data/addr valid indicator.
 );
 
 logic [DATA_WDT-1:0] wr_data;    // Data to write.
@@ -171,9 +171,9 @@ ahb_manager
     .i_min_len(min_len),
     .i_first_xfer(first_xfer),
     .o_next(next),
-    .o_data(o_data),
-    .o_addr(o_addr),
-    .o_dav(o_dav),
+    .o_data(o_rd_data),
+    .o_addr(o_rd_data_addr),
+    .o_dav (o_rd_data_dav),
     .o_err(err)
 );
 

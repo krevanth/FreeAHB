@@ -93,9 +93,9 @@ can specify upto 1024 here. Valid values are 32, 64, 128, 256, 512 and 1024.
 |i_rd         |I    |1       |Indicates a read burst command sequence. Can be gapped in the middle of the read burst command sequence to pause read data coming out the AHB manager.                                                         |
 |i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer (upto 64K) but cannot be shorter than this. Hold throughout the burst command sequence. Valid range of values is 1 through 65535 inclusive. Specifying 0 here i.e., zero length is illegal. |
 |i_first_xfer |I    |1       |When new UI signals are setup for a new burst, make this 1 for the first beat. Make it 0 for the rest of the burst command sequence. When 1, ensure i_rd=1 or i_wr=1.                                          |
-|o_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command: it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence.|
-|o_addr       |O    |32      |Associated address corresponding to the read data presented on the above port.                                                                                                                                 |
-|o_dav        |O    |1       |Qualifies the above two signals when 1.                                                                                                                                                                        |
+|o_rd_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command: it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence.|
+|o_rd_data_addr       |O    |32      |Associated address corresponding to the read data presented on the above port.                                                                                                                                 |
+|o_rd_data_dav        |O    |1       |Qualifies the above two signals when 1.                                                                                                                                                                        |
 
 ## Project Environment
 

@@ -119,6 +119,9 @@ assign hwdata1 = u_ahb_manager_top.o_hwdata[1];
 ahb_manager_top #(.DATA_WDT(DATA_WDT)) u_ahb_manager_top
 (
     .*,
+    .o_rd_data(o_data),
+    .o_rd_data_dav(o_dav),
+    .o_rd_data_addr(o_addr),
     .i_wr_data(i_data), .o_stall(stall_tmp),
     .i_first_xfer(i_first_xfer)
 );
