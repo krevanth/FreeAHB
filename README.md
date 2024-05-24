@@ -27,14 +27,6 @@ https://github.com/krevanth/FreeAHB. Apologies for the inconvenience caused.
 Unfortunately, the issue history and the list of the repo's forks could not be
 restored.
 
-## Compatibility
-
-All features of the AHB 2.0 manager protocol are supported.
-
-## Limitations
-
-No limitations.
-
 ## License
 
 **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
