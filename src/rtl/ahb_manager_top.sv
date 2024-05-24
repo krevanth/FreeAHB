@@ -18,8 +18,6 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-//
-// AHB manager that implements all 2.0 features except WRAP transfers.
 // ----------------------------------------------------------------------------
 
 module ahb_manager_top import ahb_manager_pack::*; #(parameter DATA_WDT = 32) (
