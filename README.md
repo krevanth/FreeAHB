@@ -1,6 +1,8 @@
 # FreeAHB : An AHB 2.0 Manager (https://github.com/krevanth/FreeAHB/)
 
-**Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
+**Copyright (C) 2017-2024 [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
+
+**IMPORTANT: PLEASE VERIFY THAT YOU ARE VIEWING THE ORIGINAL REPO AT [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) TO AVOID ACCIDENTIALLY LOOKING AT FORKS/DETACHED FORKS/UNCONTROLLED COPIES.**
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -111,7 +113,11 @@ SHOULD HAVE EITHER RD=1 OR WR=1.
 
 ### Installing Tools
 
-The FreeAHB project requires a Linux based system with Docker installed.
+The FreeAHB project requires a Linux based system with Docker installed. The 
+project environment assumes a Linux based machine and additionally requires 
+Docker to be installed at your site. Click [here](https://docs.docker.com/engine/install/) 
+for instructions on how to install Docker. The steps here assume that the user 
+is a part of the `docker` group. 
 
 ### Make Targets
 
