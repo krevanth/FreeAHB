@@ -18,31 +18,60 @@
 #  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 #  SOFTWARE.
 
-.PHONY: sim clean lint
+.PHONY: sim clean lint runlint runsim
 
-waves: obj/ahb_manager.vcd 
-	gtkwave obj/ahb_manager.vcd	
+MAKE_THREADS := $(shell getconf _NPROCESSORS_ONLN)
+SHELL := /bin/bash -o pipefail
+PWD   := $(shell pwd)
+TAG   := archlinux/freeahb
+DLOAD := "FROM archlinux:latest\n\
+          RUN pacman -Syyu --noconfirm cargo make verilator\n\
+          RUN cargo install svlint"
 
-sim: obj/ahb_manager.out
-	cd obj ; ./ahb_manager.out
+DOCKER		 := docker run --interactive --tty --volume $(PWD):$(PWD) --workdir $(PWD) $(TAG)
+LOAD_DOCKER  := docker image ls | grep $(TAG) || echo -e $(DLOAD) | docker build --no-cache --rm --tag $(TAG) -
+
+###############################################################################
+# User Accessible Targets
+###############################################################################
+
+.DEFAULT_GOAL = sim
 
 clean:
-	rm -rfv obj
+	$(LOAD_DOCKER)
+	$(DOCKER) rm -rfv obj/ obj_dir/ || exit 10
 
 lint:
-	verilator --lint-only src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \
-    src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv
-	svlint src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv \
-    src/rtl/ahb_manager_skid_buffer.sv 
-	iverilog -Wall -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv \
-    src/rtl/ahb_manager_skid_buffer.sv -o /dev/null
+	$(LOAD_DOCKER)
+	$(DOCKER) $(MAKE) runlint || exit 10
 
-obj/ahb_manager.vcd: obj/ahb_manager.out
-	cd obj ; ./ahb_manager.out
+sim:
+	$(LOAD_DOCKER)
+	$(DOCKER) $(MAKE) runsim || exit 10
 
-obj/ahb_manager.out: src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv src/testbench/tb.sv
-	mkdir -p obj
-	iverilog -g2012 src/rtl/ahb_manager_pack.sv src/rtl/ahb_manager.sv \
-    src/rtl/ahb_manager_top.sv src/rtl/ahb_manager_skid_buffer.sv \
-    src/testbench/tb.sv -o obj/ahb_manager.out
+reset: clean
+	docker image ls | grep $(TAG) && docker image rmi -- force $(TAG)
+
+###############################################################################
+# Internal Targets
+###############################################################################
+
+runlint:
+	verilator -GDATA_WDT=32 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=64 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=128 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=256 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=512 --lint-only src/rtl/ahb_manager.sv 
+	/root/.cargo/bin/svlint src/rtl/ahb_manager.sv 
+
+runsim: runcompile
+	mkdir -p obj/
+	cd obj ; ./Vahb_manager_test
+
+runcompile:
+	mkdir -p obj/
+	verilator -O3 -j $(MAKE_THREADS) --threads $(MAKE_THREADS) --cc --Wno-lint --cc --exe \
+    --assert --build ../src/testbench/ahb_manager_test.cpp --Mdir obj/ --top \
+    ahb_manager_test -Isrc/rtl src/rtl/*.sv -Iobj/ src/testbench/*.sv --trace --x-assign unique \
+	--x-initial unique --error-limit 1 
 

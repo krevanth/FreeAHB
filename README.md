@@ -49,10 +49,8 @@ restored.
 
 ## System Integration
 
-- The file `ahb_manager_top.sv` is the top level AHB manager module.
-- Please compile all the files in `src/rtl` in order to use the AHB manager.
-- Instructions to use the UI are included in the `ahb_manager_top.sv` file near the UI ports itself.
-- Running the provided testcase will provide a sample illustration of how the UI should be used.
+The file `src/rtl/ahb_manager.sv` is the AHB manager module. The port description
+below provides instructions on how to use the AHB manager.
 
 ### Parameters
 
@@ -81,19 +79,31 @@ can specify upto 1024 here. Valid values are 32, 64, 128, 256, 512 and 1024.
 
 #### User Interface
 
+- Do not change any of the UI inputs throughout a burst command sequence except 
+i_first_xfer and i_wr_data - that too only when o_stall = 0.
+- Use i_first_xfer=1 to signal start of a new burst. Again, note that
+this can be done only when o_stall = 0.
+- DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION. ONLY MAKE IT 1
+AFTER ENTIRE BURST COMMAND SEQUENCE HAS COMPLETELY BEEN GIVEN TO THE UNIT.
+- OUT OF RESET, KEEP I_IDLE=1 FOR AT LEAST 1 CYCLE. WHEN I_FIRST_XFER=1, YOU
+SHOULD HAVE EITHER RD=1 OR WR=1. 
+- Note that i_idle=1 causes the design to IGNORE i_rd, i_wr and i_first_xfer.
+
+
 |Port         |IO   |Width   |Description                                                                                                                                                                                                    |
 |-------------|-----|--------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|o_err        |O    |1       |Internal failure. Please reset system to resolve.  |
 |o_stall      |O    |1       |No UI signals (i_\*) are allowed to change when this is 1.                                                                                                                                                     |
 |i_idle       |I    |1       |Use this to the signal to the UI that no burst is going on. Do not assert during an ongoing burst command sequence. Expected to be 1 after entire burst command sequence has been sent to the AHB manager. Out of reset, keep i_idle=1 for atleast 1 cycle.     |
 |i_wr_data    |I    |DATA_WDT|Data to be written. May change every cycle during the burst command sequence.                                                                                                                                  |
-|i_addr       |I    |32      |Supply base address of the burst here. Should be held constant throughout the burst command sequence.                                                                                                          |
+|i_addr       |I    |32      |Supply base address of the burst here. Should be held constant throughout the burst command sequence (recommended) although you could get away with just supplying valid address when i_first_xfer=1.                                                                                                          |
 |i_size       |I    |3       |Plays a similar role to HSIZE. Should be held constant through the burst command sequence.                                                                                                                     |
 |i_mask       |I    |32      |Mask address bits to avoid changing during a burst. For example, keeping this as 0xFFFFFFF0 will wrap around 16 byte boundaries. For non wrapping transfers, set this to 0x0.                                                                               |
 |i_wr         |I    |1       |Indicates a write burst command sequnce. Can be gapped in the middle of the write burst command sequence to throttle i_wr_data getting into the AHB manager.                                                   |
 |i_rd         |I    |1       |Indicates a read burst command sequence. Can be gapped in the middle of the read burst command sequence to pause read data coming out the AHB manager.                                                         |
-|i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer (upto 64K) but cannot be shorter than this. Hold throughout the burst command sequence. Valid range of values is 1 through 65535 inclusive. Specifying 0 here i.e., zero length is illegal. |
+|i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer (upto 64K) but cannot be shorter than this. Hold throughout the burst command sequence (recommended) although you could get away with just supplying valid value when i_first_xfer=1. Valid range of values is 1 (minimum length is 1 beat) through 65535 inclusive. Specifying 0 here i.e., zero length is illegal. |
 |i_first_xfer |I    |1       |When new UI signals are setup for a new burst, make this 1 for the first beat. Make it 0 for the rest of the burst command sequence. When 1, ensure i_rd=1 or i_wr=1.                                          |
-|o_rd_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command: it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence.|
+|o_rd_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command i.e., it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence.|
 |o_rd_data_addr       |O    |32      |Associated address corresponding to the read data presented on the above port.                                                                                                                                 |
 |o_rd_data_dav        |O    |1       |Qualifies the above two signals when 1.                                                                                                                                                                        |
 
@@ -101,23 +111,15 @@ can specify upto 1024 here. Valid values are 32, 64, 128, 256, 512 and 1024.
 
 ### Installing Tools
 
-The FreeAHB project requires several tools to be installed locally at your site.
-Please execute the following commands to install the required tools. The project
-assumes you are using a Linux based system.
-
-`sudo apt install iverilog verilator cargo gtkwave`
-
-`cargo install svlint`
+The FreeAHB project requires a Linux based system with Docker installed.
 
 ### Make Targets
 
 Enter the project's root directory and enter one of the following commands:
 
-`make sim` will run the included test and generate a VCD file.
+`make sim` will run the included test and generate a VCD file in the `obj/` folder.
 
-`make waves' will open the VCD in GTKWave.
-
-`make clean` will remove the `obj` directory.
+`make clean` will remove the `obj` folder.
 
 `make lint` will run linting on the RTL using Verilator and SVLint.
 

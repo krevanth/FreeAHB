@@ -20,7 +20,15 @@
 // SOFTWARE.
 // ----------------------------------------------------------------------------
 
-module tb;
+package tb_pack;
+typedef enum logic [2:0] {SINGLE, INCR=3'd1, INCR4=3'd3, INCR8=3'd5, INCR16=3'd7} t_hburst;
+typedef enum logic [1:0] {IDLE, BUSY, NONSEQ, SEQ} t_htrans;
+typedef enum logic [2:0] {W8, W16, W32, W64, W128, W256, W512, W1024} t_hsize;
+typedef enum logic [1:0] {OKAY, ERROR, SPLIT, RETRY} t_hresp;
+endpackage
+
+module ahb_manager_test import tb_pack::*; (input  i_hclk, output logic sim_err = 1'd0, output logic sim_err1 = 1'd0,
+                                            output logic sim_ok = 1'd0);
 
 parameter DATA_WDT  = 32;
 parameter MAX_LEN   = 8;
@@ -28,13 +36,10 @@ parameter MIN_LEN   = 4;
 parameter BASE_ADDR = 'h100;
 
 localparam MEM_SIZE = MAX_LEN;
-
-import ahb_manager_pack::*;
-
 localparam BEAT_WDT = 16;
 
-bit                    i_hclk;
 bit                    i_hreset_n;
+logic                  o_err;
 logic [31:0]           o_haddr;
 t_hburst               o_hburst;
 t_htrans               o_htrans;
@@ -113,17 +118,27 @@ logic [2:0] rand_sel;
 
 assign o_next  = ~stall_tmp;
 
-ahb_manager_top #(.DATA_WDT(DATA_WDT)) u_ahb_manager_top
+ahb_manager #(
+    .DATA_WDT(DATA_WDT),
+    .t_hburst(t_hburst),
+    .t_htrans(t_htrans),
+    .t_hsize(t_hsize),
+    .t_hresp(t_hresp)
+) u_ahb_manager
 (
     .*,
     .o_rd_data(o_data),
     .o_rd_data_dav(o_dav),
     .o_rd_data_addr(o_addr),
-    .i_wr_data(i_data), .o_stall(stall_tmp),
+    .i_wr_data(i_data),
+    .o_stall(stall_tmp),
     .i_first_xfer(i_first_xfer)
 );
 
-ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) u_ahb_sub_sim (
+ahb_subordinate_sim #(
+    .DATA_WDT(DATA_WDT),
+    .MEM_SIZE(MEM_SIZE)
+) u_ahb_sub_sim (
     .i_hclk         (i_hclk),
     .i_hreset_n     (i_hreset_n),
     .i_hburst       (o_hburst),
@@ -139,11 +154,50 @@ ahb_subordinate_sim   #(.DATA_WDT(DATA_WDT), .MEM_SIZE(MEM_SIZE)) u_ahb_sub_sim 
     .o_hresp        (i_hresp)
 );
 
-always #10 i_hclk++;
+t_htrans             htrans0, htrans1, htrans2;
+t_hsize              hsize0, hsize1, hsize2;
+logic [DATA_WDT-1:0] hwdata0, hwdata1, hwdata2;
+logic [31:0]         mask0, mask1, mask2;
+logic [31:0]         haddr0, haddr1, haddr2;
+enum {START, LIFT_RESET, DRV_FIRST_CMD, DRIVE_OTHER_CMD, WR_TO_IDLE, RD_TO_IDLE, FINISH} sequencer = START;
+int ctr, ctr1, i, rd_cycles;
 
-always @ (posedge i_hclk)
-    assert(!o_dav || !i_hreset_n || (o_data + BASE_ADDR == o_addr))
-    else $fatal(2, "Data comparison mismatch.");
+assign {htrans2, htrans1, htrans0} = {u_ahb_manager.htrans[2], u_ahb_manager.htrans[1], u_ahb_manager.htrans[0]};
+assign {hsize2,  hsize1,  hsize0}  = {u_ahb_manager.hsize[2],  u_ahb_manager.hsize[1],  u_ahb_manager.hsize[0]};
+assign {hwdata2, hwdata1, hwdata0} = {u_ahb_manager.hwdata[2], u_ahb_manager.hwdata[1], u_ahb_manager.hwdata[0]};
+assign {mask2,   mask1,   mask0}   = {u_ahb_manager.mask[2],   u_ahb_manager.mask[1],   u_ahb_manager.mask[0]};
+assign {haddr2,  haddr1,  haddr0}  = {u_ahb_manager.haddr[2],  u_ahb_manager.haddr[1],  u_ahb_manager.haddr[0]};
+
+always @ (posedge i_hclk or negedge i_hreset_n)
+begin
+    if(i_hreset_n) // OK to do because this is an assertion.
+    begin
+        assert(!o_err) else $fatal(2, "Device internal error occured.");
+    end
+
+    if ( i_hreset_n && o_dav ) // OK to do because this is an assertion.
+    begin
+        rd_cycles <= rd_cycles + 'd1;
+
+        assert(o_data + BASE_ADDR == o_addr)
+            $display("OK! Data check passed! o_data=0x%x o_addr=0x%x BASE_ADDR=0x%x",
+            o_data, o_addr, BASE_ADDR);
+        else
+        begin
+            $display(2, "Data comparison mismatch. o_data=0x%x o_addr=0x%x BASE_ADDR=0x%x",
+            o_data, o_addr, BASE_ADDR);
+
+            sim_err <= 1'd1;
+            $finish;
+        end
+    end
+
+    if ( rd_cycles == MAX_LEN )
+    begin
+        sim_ok <= 1'd1;
+        $finish;
+    end
+end
 
 always @ (posedge i_hclk)
 begin
@@ -151,42 +205,59 @@ begin
     rand_sel <= $random;
 end
 
-initial begin
-        $dumpfile("ahb_manager.vcd");
-        $dumpvars;
+initial
+begin
+    $dumpfile("ahb_manager.vcd");
+    $dumpvars;
+end
 
-        i_rd         <= 'd0;
-        i_wr         <= 'd0;
-        i_first_xfer <= 'd0;
-        i_idle       <= 'd1;
-        i_hreset_n   <= 'd0;
+always @ (posedge i_hclk)
+begin
+        case(sequencer)
 
-        d(1);
-
-        i_hreset_n   <= 1'd1;
-
-        d(10);
-
-        for(int i=0;i<2;i++)
+        START:
         begin
-            wait_for_next;
+            i_rd         <= 'd0;
+            i_wr         <= 'd0;
+            i_first_xfer <= 'd0;
+            i_idle       <= 'd1;
+            i_hreset_n   <= 'd0;
+            sequencer    <= LIFT_RESET;
+            ctr          <= 'd0;
+        end
 
-            {dat, dav}     = 0;
+        LIFT_RESET:
+        begin
+            sequencer  <= DRV_FIRST_CMD;
+            i_hreset_n <= 1'd1;
+            i          <= 1'd0;
+        end
 
-            i_addr        <= BASE_ADDR;
-            i_min_len     <= MIN_LEN;
-            i_wr          <= i == 0 ? 1'd1 : 1'd0;
-            i_rd          <= i == 0 ? 1'd0 : 1'd1;
-            i_first_xfer  <= 1'd1;
-            i_data        <= i == 0 ? 0 : 'dx;
-            i_idle        <= 1'd0;
-
-            wait_for_next;
-
-            while(dat < MAX_LEN - 1)
+        DRV_FIRST_CMD:
+        begin
+            if ( o_next )
             begin
-                    dav = $random;
-                    dat = dat + dav;
+                i_addr        <= BASE_ADDR;
+                i_min_len     <= MIN_LEN;
+                i_wr          <= i == 0 ? 1'd1 : 1'd0;
+                i_rd          <= i == 0 ? 1'd0 : 1'd1;
+                i_first_xfer  <= 1'd1;
+                i_data        <= i == 0 ? 0 : 'dx;
+                i_idle        <= 1'd0;
+                sequencer     <= DRIVE_OTHER_CMD;
+                dat           <= 'd1;
+                dav           <= $random;
+            end
+        end
+
+        DRIVE_OTHER_CMD:
+        begin
+            if ( o_next )
+            begin
+                if (dat < MAX_LEN)
+                begin
+                    dat <= dat + dav; // This is TB, so this is OK.
+                    dav <= $random;   // This is TB, so this is OK.
 
                     i_first_xfer <= 1'd0;
 
@@ -201,54 +272,62 @@ initial begin
                         i_wr   <= 'd0;
                         i_data <= 'x;
                     end
-
-                    wait_for_next;
+                end
+                else
+                begin
+                    sequencer     <= i == 0 ? WR_TO_IDLE : RD_TO_IDLE;
+                    i_rd          <= 1'd0;
+                    i_wr          <= 1'd0;
+                    i_first_xfer  <= 1'd0;
+                    i_idle        <= 1'd1;
+                    ctr           <= 'd0;
+                end
             end
-
-            i_rd          <= 1'd0;
-            i_wr          <= 1'd0;
-            i_first_xfer  <= 1'd0;
-            i_idle        <= 1'd1;
-
-            d(10);
         end
 
-        d(100);
+        WR_TO_IDLE:
+        begin
+            ctr         <= ctr + 'd1;
+            sequencer   <= ctr == 'd100 ? DRV_FIRST_CMD : WR_TO_IDLE;
+            i           <= 1'd1;
+        end
 
-        $display("Normal end of sim");
-        $finish;
+        RD_TO_IDLE:
+        begin
+            ctr         <= ctr + 'd1;
+            sequencer   <= ctr == 'd100 ? FINISH : RD_TO_IDLE;
+        end
+
+        FINISH:
+        begin
+            // Wait.
+        end
+
+        endcase
 end
 
-initial
+always @ (posedge i_hclk)
 begin
-    d(10000);
-    $fatal(2, "Simulation hang.");
+    ctr1 <= ctr1 + 'd1;
+
+    if(ctr1 == MAX_LEN * 1000)
+    begin
+        $display("Too many clock cycles elapsed!");
+        sim_err1 <= 1'd1;
+        $finish;
+    end
 end
-
-task wait_for_next;
-        d(1);
-        while(o_next !== 1) d(1);
-endtask
-
-task d(int x);
-        repeat(x)
-        @(posedge i_hclk);
-endtask
 
 endmodule
 
-module ahb_subordinate_sim
-
-import ahb_manager_pack::*;
-
-#(parameter DATA_WDT = 32, parameter MEM_SIZE=256)
-
-(
-
+module ahb_subordinate_sim import tb_pack::*; #(
+parameter DATA_WDT = 32,
+parameter MEM_SIZE=256
+)(
 input                   i_hclk,
 input                   i_hreset_n,
-input [2:0]             i_hburst,
-input [1:0]             i_htrans,
+input t_hburst          i_hburst,
+input t_htrans          i_htrans,
 input [31:0]            i_hwdata,
 input [31:0]            i_haddr,
 input                   i_hwrite,
@@ -257,8 +336,7 @@ input [2:0]             i_lfsr,
 
 output logic [31:0]       o_hrdata,
 output logic              o_hready,
-output logic [1:0]        o_hresp
-
+output       t_hresp      o_hresp
 );
 
 logic [MEM_SIZE-1:0][7:0]    mem;
@@ -331,7 +409,6 @@ always @ (posedge i_hclk or negedge i_hreset_n)
 begin
         if ( !i_hreset_n )
         begin
-            mem      <= '0;
             o_hrdata <= '0;
             write    <= '0;
         end
