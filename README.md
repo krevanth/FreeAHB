@@ -38,7 +38,7 @@ All of the FreeAHB test code is **Copyright (C) 2017-2024 by [Revanth Kamaraj](h
 
 The repo https://github.com/krevanth/FreeAHB is the official, definitive and authoritative FreeAHB repo. The repository provides an AHB 2.0 Manager.
 
-### What happened to the repo and it's forks ?
+### What happened to the repo's forks, issue history, stars and watcher lists ?
 
 The repo https://github.com/krevanth/FreeAHB was detached from its forks (as
 an unintended consequence) when the repo was made private and was then deleted
@@ -48,7 +48,7 @@ before i.e., https://github.com/krevanth/FreeAHB and those who have forked the
 repo before are encouraged to make a new fork based on
 https://github.com/krevanth/FreeAHB. Apologies for the inconvenience caused.
 
-Unfortunately, the issue history and the list of the repo's forks could not be
+Unfortunately, the issue history, stars, watcher lists and the list of the repo's forks could not be
 restored.
 
 ## System Integration
