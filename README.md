@@ -1,6 +1,6 @@
 # FreeAHB : An AHB 2.0 Manager (https://github.com/krevanth/FreeAHB/)
 
-**Copyright (C) 2017-2024 [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
+**Copyright (C) 2017-2024 [Revanth Kamaraj](https://github.com/krevanth) (krevanth) <<revanth91kamaraj@gmail.com>>**
 
 **IMPORTANT: PLEASE VERIFY THAT YOU ARE VIEWING THE ORIGINAL REPO AT [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) TO AVOID ACCIDENTIALLY LOOKING AT FORKS/DETACHED FORKS/UNCONTROLLED COPIES.**
 
@@ -28,11 +28,11 @@ SOFTWARE.
 
 ### RTL Design
 
-All of the FreeAHB RTL is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
+All of the FreeAHB RTL is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) (krevanth) <<revanth91kamaraj@gmail.com>>**
 
 ### Verification
 
-All of the FreeAHB test code is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) <<revanth91kamaraj@gmail.com>>**
+All of the FreeAHB test code is **Copyright (C) 2017-2024 by [Revanth Kamaraj](https://github.com/krevanth) (krevanth) <<revanth91kamaraj@gmail.com>>**
 
 ## Notice
 
@@ -87,11 +87,15 @@ can specify upto 1024 here. Valid values are 8, 16, 32, 64, 128, 256, 512 and 10
 i_first_xfer and i_wr_data - that too only when o_stall = 0.
 - Use i_first_xfer=1 to signal start of a new burst. Again, note that
 this can be done only when o_stall = 0.
-- DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION. ONLY MAKE IT 1
-AFTER ENTIRE BURST COMMAND SEQUENCE HAS COMPLETELY BEEN GIVEN TO THE UNIT.
-- OUT OF RESET, KEEP I_IDLE=1 FOR AT LEAST 1 CYCLE. 
-- WHEN I_FIRST_XFER=1, YOU SHOULD HAVE EITHER RD=1 OR WR=1. 
+- Do not make i_idle=1 in between an ongoing burst command sequence. Only make 
+it 1 after the entire burst command sequence has been completely given to the 
+unit.
+- Out of reset, keep i_idle=1 i_rd=0 i_wr=0 i_first_xfer=0 for atleast 1 cycle. 
+- When i_first_xter=1, you should have either i_rd=1 or i_wr=1 
+(along with i_idle=0).
 - Note that i_idle=1 causes the design to IGNORE i_rd, i_wr and i_first_xfer.
+Nevertheless, it is recommended to make i_rd=0 i_wr=0 i_first_xfer=0 when 
+setting i_idle=1.
 
 
 |Port         |IO   |Width   |Description                                                                                                                                                                                                    |
@@ -102,7 +106,7 @@ AFTER ENTIRE BURST COMMAND SEQUENCE HAS COMPLETELY BEEN GIVEN TO THE UNIT.
 |i_wr_data    |I    |DATA_WDT|Data to be written. May change every cycle during the burst command sequence. The i_size determines the valid bits of this. For example, if i_size = 0, only 7:0 will be considered. If i_size=1, only 15:0 of this will be considered.                                                                                                                                 |
 |i_addr       |I    |32      |Supply base address of the burst here. Should be held constant throughout the burst command sequence (recommended) although you could get away with just supplying valid address when i_first_xfer=1.                                                                                                          |
 |i_size       |I    |3       |Should be held constant through the burst command sequence. Throughout a burst, some fixed byte lanes are considered on the UI data (i_wr_data, o_rd_data) while other fixed byte lanes are IGNORED. If i_size = 0, only 7:0 is considered; if i_size = 1, only 15:0 is considered; if i_size = 2, only 31:0 is considered; if i_size = 3, only 63:0 is considered; if i_size = 4, only 127:0 is considered; if i_size=5, only 255:0 is considered; if i_size=6, only 511:0 is considered; if i_size=7, only 1023:0 is considered.                                                                                                                      |
-|i_mask       |I    |32      |Mask address bits to avoid changing during a burst. For example, keeping this as 0xFFFFFFF0 will wrap around 16 byte boundaries. For non wrapping transfers, set this to 0x0.                                                                               |
+|i_mask       |I    |32      |Mask address bits to avoid changing during a burst. For example, keeping this as 0xFFFFFFF0 will wrap around 16 byte boundaries. For non wrapping transfers, set this to 0x0. A non 0x0 value here automatically implies a wrapping transfer. Care must be taken by the user to keep the mask values correctly. For example, the user cannot expect a 16 byte burst if i_hsize=5 i.e., 32 byte. The device handles wrapping transfers as a set of separate INCR\* transactions that are issued back-to-back.                                                                               |
 |i_wr         |I    |1       |Indicates a write burst command sequnce. Can be gapped in the middle of the write burst command sequence to throttle i_wr_data getting into the AHB manager.                                                   |
 |i_rd         |I    |1       |Indicates a read burst command sequence. Can be gapped in the middle of the read burst command sequence to pause read data coming out the AHB manager.                                                         |
 |i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer (upto 64K) but cannot be shorter than this. Hold throughout the burst command sequence (recommended) although you could get away with just supplying valid value when i_first_xfer=1. Valid range of values is 1 (minimum length is 1 beat) through 65535 inclusive. Specifying 0 here i.e., zero length is illegal. |
