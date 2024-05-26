@@ -324,33 +324,33 @@ module ahb_subordinate_sim import tb_pack::*; #(
 parameter DATA_WDT = 32,
 parameter MEM_SIZE=256
 )(
-input                   i_hclk,
-input                   i_hreset_n,
-input t_hburst          i_hburst,
-input t_htrans          i_htrans,
-input [31:0]            i_hwdata,
-input [31:0]            i_haddr,
-input                   i_hwrite,
-input                   i_hgrant,
-input [2:0]             i_lfsr,
+input                     i_hclk,
+input                     i_hreset_n,
+input t_hburst            i_hburst,
+input t_htrans            i_htrans,
+input [DATA_WDT-1:0]      i_hwdata,
+input [31:0]              i_haddr,
+input                     i_hwrite,
+input                     i_hgrant,
+input [2:0]               i_lfsr,
 
 output logic [31:0]       o_hrdata,
 output logic              o_hready,
 output       t_hresp      o_hresp
 );
 
-logic [MEM_SIZE-1:0][7:0]    mem;
-logic [7:0]                  mem_wr_data;
-logic [MEM_SIZE-1:0]         mem_wr_en;
-logic [$clog2(MEM_SIZE)-1:0] mem_wr_addr;
-logic                        write;
-logic [31:0]                 addr;
-logic [DATA_WDT-1:0]         data;
-logic [2:0]                  rand_sel;
-t_htrans                     mode;
-logic                        hready_int;
-logic                        tmp, sub_sel;
-t_htrans                     htrans;
+logic [MEM_SIZE-1:0][DATA_WDT-1:0]    mem;
+logic [DATA_WDT-1:0]                  mem_wr_data;
+logic [MEM_SIZE-1:0]                  mem_wr_en;
+logic [$clog2(MEM_SIZE)-1:0]          mem_wr_addr;
+logic                                 write;
+logic [31:0]                          addr;
+logic [DATA_WDT-1:0]                  data;
+logic [2:0]                           rand_sel;
+t_htrans                              mode;
+logic                                 hready_int;
+logic                                 tmp, sub_sel;
+t_htrans                              htrans;
 
 assign htrans = i_htrans;
 assign rand_sel = i_lfsr;
@@ -422,6 +422,7 @@ begin
                         if ( !i_hwrite )
                         begin
                             o_hrdata <= mem [i_haddr];
+                            $display("Got data %x from address %x", o_hrdata, mem[i_haddr]);
                         end
                 end
                 else

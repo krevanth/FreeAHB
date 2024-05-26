@@ -4,7 +4,7 @@
 
 **IMPORTANT: PLEASE VERIFY THAT YOU ARE VIEWING THE ORIGINAL REPO AT [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) TO AVOID ACCIDENTIALLY LOOKING AT FORKS/DETACHED FORKS/UNCONTROLLED COPIES.**
 
-**IMPORTANT: Note that [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) was unintentionally deleted but has now been restored from backups on 22/05/2024. Sadly, the fork list, issues, stars and watchers couldn't be restored.**
+**IMPORTANT: Note that [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) was unintentionally deleted but has now been restored from backups on 22/05/2024. Sadly, the fork list, issues, stars and watchers couldn't be restored. DUE TO THESE ISSUES, ALL PREVIOUS FORKS OF THIS REPO HAVE BEEN DETACHED FROM IT.**
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -59,7 +59,7 @@ below provides instructions on how to use the AHB manager.
 ### Parameters
 
 `DATA_WDT` specifies the width of the data busses. This is 32 by default. You
-can specify upto 1024 here. Valid values are 32, 64, 128, 256, 512 and 1024.
+can specify upto 1024 here. Valid values are 8, 16, 32, 64, 128, 256, 512 and 1024.
 
 ### Ports
 
@@ -89,8 +89,8 @@ i_first_xfer and i_wr_data - that too only when o_stall = 0.
 this can be done only when o_stall = 0.
 - DO NOT MAKE I_IDLE=1 IN BETWEEN AN ONGOING BURST OPERATION. ONLY MAKE IT 1
 AFTER ENTIRE BURST COMMAND SEQUENCE HAS COMPLETELY BEEN GIVEN TO THE UNIT.
-- OUT OF RESET, KEEP I_IDLE=1 FOR AT LEAST 1 CYCLE. WHEN I_FIRST_XFER=1, YOU
-SHOULD HAVE EITHER RD=1 OR WR=1. 
+- OUT OF RESET, KEEP I_IDLE=1 FOR AT LEAST 1 CYCLE. 
+- WHEN I_FIRST_XFER=1, YOU SHOULD HAVE EITHER RD=1 OR WR=1. 
 - Note that i_idle=1 causes the design to IGNORE i_rd, i_wr and i_first_xfer.
 
 
@@ -99,15 +99,15 @@ SHOULD HAVE EITHER RD=1 OR WR=1.
 |o_err        |O    |1       |Internal failure. Please reset system to resolve.  |
 |o_stall      |O    |1       |No UI signals (i_\*) are allowed to change when this is 1.                                                                                                                                                     |
 |i_idle       |I    |1       |Use this to the signal to the UI that no burst is going on. Do not assert during an ongoing burst command sequence. Expected to be 1 after entire burst command sequence has been sent to the AHB manager. Out of reset, keep i_idle=1 for atleast 1 cycle.     |
-|i_wr_data    |I    |DATA_WDT|Data to be written. May change every cycle during the burst command sequence.                                                                                                                                  |
+|i_wr_data    |I    |DATA_WDT|Data to be written. May change every cycle during the burst command sequence. The i_size determines the valid bits of this. For example, if i_size = 0, only 7:0 will be considered. If i_size=1, only 15:0 of this will be considered.                                                                                                                                 |
 |i_addr       |I    |32      |Supply base address of the burst here. Should be held constant throughout the burst command sequence (recommended) although you could get away with just supplying valid address when i_first_xfer=1.                                                                                                          |
-|i_size       |I    |3       |Plays a similar role to HSIZE. Should be held constant through the burst command sequence.                                                                                                                     |
+|i_size       |I    |3       |Should be held constant through the burst command sequence. Throughout a burst, some fixed byte lanes are considered on the UI data (i_wr_data, o_rd_data) while other fixed byte lanes are IGNORED. If i_size = 0, only 7:0 is considered; if i_size = 1, only 15:0 is considered; if i_size = 2, only 31:0 is considered; if i_size = 3, only 63:0 is considered; if i_size = 4, only 127:0 is considered; if i_size=5, only 255:0 is considered; if i_size=6, only 511:0 is considered; if i_size=7, only 1023:0 is considered.                                                                                                                      |
 |i_mask       |I    |32      |Mask address bits to avoid changing during a burst. For example, keeping this as 0xFFFFFFF0 will wrap around 16 byte boundaries. For non wrapping transfers, set this to 0x0.                                                                               |
 |i_wr         |I    |1       |Indicates a write burst command sequnce. Can be gapped in the middle of the write burst command sequence to throttle i_wr_data getting into the AHB manager.                                                   |
 |i_rd         |I    |1       |Indicates a read burst command sequence. Can be gapped in the middle of the read burst command sequence to pause read data coming out the AHB manager.                                                         |
 |i_min_len    |I    |16      |Specify the minimum number of beats in the burst command sequence. The actual burst command sequence can be longer (upto 64K) but cannot be shorter than this. Hold throughout the burst command sequence (recommended) although you could get away with just supplying valid value when i_first_xfer=1. Valid range of values is 1 (minimum length is 1 beat) through 65535 inclusive. Specifying 0 here i.e., zero length is illegal. |
 |i_first_xfer |I    |1       |When new UI signals are setup for a new burst, make this 1 for the first beat. Make it 0 for the rest of the burst command sequence. When 1, ensure i_rd=1 or i_wr=1.                                          |
-|o_rd_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command i.e., it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence.|
+|o_rd_data       |O    |DATA_WDT|Requested read data is present out in an in-order sequence decoupled from the command i.e., it can come after the read command sequence has been fed into the AHB manager completely and i_idle=1 after the sequence. Based on the i_size provided with the read command sequence, only certain bits should be considered as valid. For example, i_size = 0 should consider only 7:0 of this bus to be valid read data. If i_size=1, only 15:0 of this bus should be considered valid read data. |
 |o_rd_data_addr       |O    |32      |Associated address corresponding to the read data presented on the above port.                                                                                                                                 |
 |o_rd_data_dav        |O    |1       |Qualifies the above two signals when 1.                                                                                                                                                                        |
 
@@ -115,11 +115,7 @@ SHOULD HAVE EITHER RD=1 OR WR=1.
 
 ### Installing Tools
 
-The FreeAHB project requires a Linux based system with Docker installed. The 
-project environment assumes a Linux based machine and additionally requires 
-Docker to be installed at your site. Click [here](https://docs.docker.com/engine/install/) 
-for instructions on how to install Docker. The steps here assume that the user 
-is a part of the `docker` group. 
+The project environment assumes a Linux based machine and additionally requires Docker to be installed at your site. Click [here](https://docs.docker.com/engine/install/) for instructions on how to install Docker. The steps here assume that the user is a part of the `docker` group.
 
 ### Make Targets
 

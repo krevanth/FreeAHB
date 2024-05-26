@@ -1,24 +1,24 @@
-// ----------------------------------------------------------------------------
-// Copyright (C) 2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
-//
-// Permission is hereby granted, free of charge, to any person obtaining a copy
-// of this software and associated documentation files (the "Software"), to deal
-// in the Software without restriction, including without limitation the rights
-// to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-// copies of the Software, and to permit persons to whom the Software is
-// furnished to do so, subject to the following conditions:
-//
-// The above copyright notice and this permission notice shall be included in all
-// copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-// AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-// SOFTWARE.
-// ----------------------------------------------------------------------------
+/*
+Copyright (C)2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 
 `ifndef __FREEAHB_AHB_MASTER_DEFINES__
 `define __FREEAHB_AHB_MASTER_DEFINES__
@@ -34,7 +34,8 @@
 `endif // __FREEAHB_AHB_MASTER_DEFINES__
 
 module ahb_manager #( parameter DATA_WDT = 32,
-type t_hburst = enum logic [2:0] {SINGLE, INCR=3'd1, INCR4=3'd3, INCR8=3'd5, INCR16=3'd7},
+type t_hburst = enum logic [2:0] {SINGLE, INCR=3'd1, INCR4=3'd3, INCR8=3'd5,
+                                  INCR16=3'd7},
 type t_htrans = enum logic [1:0] {IDLE, BUSY, NONSEQ, SEQ},
 type t_hsize  = enum logic [2:0] {W8, W16, W32, W64, W128, W256, W512, W1024},
 type t_hresp  = enum logic [1:0] {OKAY, ERROR, SPLIT, RETRY}
@@ -68,11 +69,42 @@ output logic   [DATA_WDT-1:0] o_rd_data,
 output logic   [31:0]         o_rd_data_addr,
 output logic                  o_rd_data_dav );
 
+logic [9:3][1:0][DATA_WDT-1:0] wgen;
+logic signed [5:0]    burst_ctr, burst_ctr_nxt, burst_ctr_nxt_sc;
+logic signed [16:0]   beat, beat_ctr, beat_ctr_burst, beat_ctr_rcmp,
+                      beat_ctr_nxt, beatx;
+logic        [1:0]    gnt, gnt_nxt;
+t_hburst              hburst, hburst_nxt;
+t_htrans              htrans0_nxt, htrans2_nxt;
+t_htrans              htrans [3];
+t_hsize               hsize  [3];
+t_hsize               hsize0_nxt, x_size;
+logic [2:0]           hwrite;
+logic [2:0][31:0]     mask;
+logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc;
+logic [2:0][31:0]     haddr;
+logic [31:0]          addr_rcmp, addr_mask, addr_sc, mask0_nxt,
+                      addr_burst, haddr0_nxt, x_mask, x_addr;
+logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
+                      term_bc_no_incr,first_xfer, nonburst, rcmp_brst_sc,
+                      recompute_brst, hbusreq_nxt, ui_idle, clkena_st1,
+                      clkena_st2, clkena_st3, rd_dav_nxt, hresp_splt_ret,
+                      hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
+                      clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
+                      htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
+                      started, started_nxt;
+logic [15:0]          x_min_len;
+logic [2:0][DATA_WDT-1:0] hwdata;
+logic [DATA_WDT + 85:0]   skid_buffer_mem_nxt, skid_buffer_mem;
+
+// Functions.
+
 function automatic logic [8:0] compute_hburst // Predict HBURST.
 ( logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] mask );
 return ((|val[15:4]) & ~burst_cross(addr, 'd15, sz, mask)) ? {INCR16,6'd16} :
        ((|val[15:3]) & ~burst_cross(addr, 'd7,  sz, mask)) ? {INCR8, 6'd8}  :
-       ((|val[15:2]) & ~burst_cross(addr, 'd3,  sz, mask)) ? {INCR4, 6'd4}  : {INCR,6'd0};
+       ((|val[15:2]) & ~burst_cross(addr, 'd3,  sz, mask)) ? {INCR4, 6'd4}  :
+                                                             {INCR,6'd0};
 endfunction : compute_hburst
 
 function automatic logic burst_cross // Will we cross 1K or wrap boundary.
@@ -83,33 +115,31 @@ function automatic logic burst_cross // Will we cross 1K or wrap boundary.
     burst_cross = ( laddr[1][31:10] != addr[31:10] ) | ( laddr[1] < addr );
 endfunction : burst_cross
 
-logic signed [5:0]       burst_ctr, burst_ctr_nxt, burst_ctr_nxt_sc;
-logic signed [16:0]      beat, beat_ctr, beat_ctr_burst, beat_ctr_rcmp,
-                         beat_ctr_nxt, beatx;
-logic        [1:0]       gnt, gnt_nxt;
-t_hburst                 hburst, hburst_nxt;
-t_htrans                 htrans0_nxt, htrans2_nxt;
-t_htrans                 htrans [3];
-t_hsize                  hsize  [3];
-t_hsize                  hsize0_nxt, x_size;
-logic    [2:0]           hwrite;
-logic    [DATA_WDT-1:0]  hwdata [3];
-logic    [31:0]          mask   [3];
-logic    [DATA_WDT-1:0]  data_nxt, hwdata0_nxt, x_wr_data;
-logic    [31:0]          haddr  [3];
-logic    [31:0]          addr_rcmp, rd_addr_nxt, addr_mask, addr_sc, mask0_nxt,
-                         addr_burst, haddr0_nxt, x_mask, x_addr;
-logic                    pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
-                         term_bc_no_incr,first_xfer, nonburst, rcmp_brst_sc,
-                         recompute_brst, hbusreq_nxt, ui_idle, clkena_st1,
-                         clkena_st2, clkena_st3, dav_nxt, hresp_splt_ret, hwrite0_nxt,
-                         htrans1_sq_nsq, htrans2_sq_nsq, clkena_st1_idx2, htrans0_idle,
-                         hready_grant, htrans1_idle, htrans0_busy, rd_wr, next, x_rd,
-                         x_wr, err, x_first_xfer, started, started_nxt;
-logic [15:0]             x_min_len;
-logic [DATA_WDT + 85:0]  skid_buffer_mem_nxt, skid_buffer_mem;
+function automatic logic [DATA_WDT-1:0] data_rota // Get data rotate amount.
+( logic src, t_hsize sz, logic [31:0] addr );
+    for(int i=3;i<=9;i++) begin
+        if (({29'd0, sz} + 'd3 == i) && (DATA_WDT > ('d1 << i))) begin
+            return wgen[i][src];
+        end
+    end
+    return 'd0;
+endfunction : data_rota
 
 // Signal aliases.
+
+for(genvar i=3;i<=9;i++) begin : l_wgen_outer_loop
+    if(DATA_WDT > ('d1 << i)) begin : l_wgen_inner_loop_if
+        assign wgen[i][0] =
+        {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
+        haddr0_nxt[$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
+        assign wgen[i][1] =
+        {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
+        haddr[1][$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
+    end : l_wgen_inner_loop_if
+    else begin : l_wgen_inner_loop_else
+        assign wgen[i] = {(2*DATA_WDT){1'd0}};
+    end : l_wgen_inner_loop_else
+end : l_wgen_outer_loop
 
 for(genvar i=0;i<32;i++) begin : l_addr_nxt
     assign addr_mask[i] = x_mask[i] ? haddr[0][i] : addr_sc[i];
@@ -137,7 +167,9 @@ assign {o_haddr,  o_hburst,o_htrans,o_hwdata,   o_hwrite, o_hsize} =
 
 // General pipeline management.
 
-assign next = ~htrans2_sq_nsq & ~spl_ret_cyc_1 & (( hready_grant & ~pend_split ) | ui_idle);
+assign next =   ~htrans2_sq_nsq & ~spl_ret_cyc_1 &
+                (( hready_grant & ~pend_split ) | ui_idle);
+
 assign gnt_nxt     = spl_ret_cyc_1 ? 2'd0 : i_hready ? {gnt[0], i_hgrant} : gnt;
 assign hbusreq_nxt = rd_wr | ~x_first_xfer | ~htrans1_idle;
 
@@ -149,24 +181,27 @@ assign skid_buffer_mem_nxt =
 {i_wr_data, i_wr & ~i_idle, i_rd & ~i_idle, i_min_len, i_mask, i_addr, i_size,
  i_first_xfer | i_idle};
 
-assign {x_wr_data, x_wr, x_rd, x_min_len, x_mask, x_addr, x_size, x_first_xfer} =
-~o_stall ? skid_buffer_mem_nxt : skid_buffer_mem;
+assign {x_wr_data, x_wr, x_rd, x_min_len, x_mask, x_addr, x_size, x_first_xfer}
+= ~o_stall ? skid_buffer_mem_nxt : skid_buffer_mem;
 
 `FREEAHB_FF(skid_buffer_mem, skid_buffer_mem_nxt, ~o_stall)
 
 // Pipe Stage 1 (ADDR)
 
-assign pend_split_nxt   = spl_ret_cyc_1 ? 1'd1 : (hready_grant ? 1'd0 : pend_split);
-assign rcmp_brst_sc     = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans0_idle, nonburst};
+assign pend_split_nxt   = spl_ret_cyc_1 ? 1'd1 :
+                          (hready_grant ? 1'd0 : pend_split);
+assign rcmp_brst_sc     = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans0_idle,
+                            nonburst};
 assign recompute_brst   = (htrans[0] != BUSY) & rcmp_brst_sc;
 
 assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
         spl_ret_cyc_1  ? { mask[0] , hwdata[0] , hwrite[0] , hsize[0] } :
         pend_split     ? { mask[1] , hwdata[1] , hwrite[1] , hsize[1] } :
         htrans2_sq_nsq ? { mask[2] , hwdata[2] , hwrite[2] , hsize[2] } :
-                         { x_mask  , x_wr_data , x_wr      , x_size   } ;
+                         { x_mask  , hwdata0_sc , x_wr      , x_size  } ;
 
-assign clkena_st1 =  spl_ret_cyc_1 | hready_grant;
+assign hwdata0_sc  = x_wr_data << data_rota('d0, x_size, haddr0_nxt);
+assign clkena_st1  = spl_ret_cyc_1 | hready_grant;
 
 assign htrans0_nxt = spl_ret_cyc_1  ? IDLE   :
                      pend_split     ? NONSEQ :
@@ -191,24 +226,27 @@ assign beat_ctr_nxt = spl_ret_cyc_1  ? beat_ctr :
                       ui_idle        ? beat_ctr :
                       recompute_brst ? beat_ctr_rcmp : beat_ctr_burst;
 
-assign beat_ctr_burst   = hburst == INCR ? beat_ctr  : (beat_ctr  - {'d17{rd_wr}});
-assign beat_ctr_rcmp    = x_first_xfer ? {1'd0, x_min_len} : beat_ctr_burst;
+assign beat_ctr_burst = hburst == INCR ? beat_ctr : (beat_ctr - {'d17{rd_wr}});
+assign beat_ctr_rcmp  = x_first_xfer ? {1'd0, x_min_len} : beat_ctr_burst;
 
 assign {hburst_nxt, burst_ctr_nxt} =
-spl_ret_cyc_1  ? {hburst, burst_ctr}                                            :
-pend_split     ? compute_hburst(beat [15:0], haddr[1], hsize[1], mask[1])       :
-htrans2_sq_nsq ? compute_hburst(beatx[15:0], haddr[2], hsize[2], mask[2])       :
-ui_idle        ? {hburst, burst_ctr}                                            :
-recompute_brst ? compute_hburst(beat_ctr_rcmp[15:0], addr_rcmp, x_size, x_mask) :
+spl_ret_cyc_1  ? {hburst, burst_ctr}                                           :
+pend_split     ? compute_hburst(beat [15:0], haddr[1], hsize[1], mask[1])      :
+htrans2_sq_nsq ? compute_hburst(beatx[15:0], haddr[2], hsize[2], mask[2])      :
+ui_idle        ? {hburst, burst_ctr}                                           :
+recompute_brst ? compute_hburst(beat_ctr_rcmp[15:0], addr_rcmp, x_size, x_mask):
                  {hburst, burst_ctr_nxt_sc};
 
-assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr : (burst_ctr - {'d6{rd_wr}});
+assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr :
+                          (burst_ctr - {'d6{rd_wr}});
 
-`FREEAHB_FF(
-{pend_split,     htrans[0],   haddr[0],    beat_ctr,     burst_ctr,     hburst,
- htrans[2],      mask[0],     hwdata[0],   hwrite[0],    hsize[0]},
-{pend_split_nxt, htrans0_nxt, haddr0_nxt,  beat_ctr_nxt, burst_ctr_nxt, hburst_nxt,
- htrans2_nxt,    mask0_nxt,   hwdata0_nxt, hwrite0_nxt,  hsize0_nxt}, clkena_st1)
+`FREEAHB_FF({
+pend_split,     htrans[0],   haddr[0],   beat_ctr,     burst_ctr, hburst
+,htrans[2],     mask[0],     hwdata[0],  hwrite[0],    hsize[0]
+},{
+pend_split_nxt, htrans0_nxt, haddr0_nxt, beat_ctr_nxt, burst_ctr_nxt, hburst_nxt
+,htrans2_nxt,   mask0_nxt,   hwdata0_nxt, hwrite0_nxt, hsize0_nxt
+},clkena_st1)
 
 assign htrans2_nxt = ( spl_ret_cyc_1 & ~htrans2_sq_nsq) ? htrans[0] :
                      (~spl_ret_cyc_1 & ~pend_split    ) ? IDLE : htrans[2];
@@ -218,33 +256,36 @@ assign htrans2_nxt = ( spl_ret_cyc_1 & ~htrans2_sq_nsq) ? htrans[0] :
 assign clkena_st1_idx2  = clkena_st1 & spl_ret_cyc_1 & ~htrans2_sq_nsq;
 
 `FREEAHB_FF({mask[2], hwdata[2], hwrite[2], hsize[2], haddr[2], beatx},
-            {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], beat}, clkena_st1_idx2)
+            {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], beat},
+            clkena_st1_idx2)
 
 // Pipe Stage 2 (HWDATA)
 
 assign clkena_st2 =  gnt[0] & i_hready;
 
-`FREEAHB_FF({hwrite[1], mask[1], hwdata[1], haddr[1], hsize[1], htrans[1], beat},
-            {hwrite[0], mask[0], hwdata[0], haddr[0], hsize[0], htrans[0], beat_ctr},
-             clkena_st2)
+`FREEAHB_FF(
+{hwrite[1], mask[1], hwdata[1], haddr[1], hsize[1], htrans[1], beat},
+{hwrite[0], mask[0], hwdata[0], haddr[0], hsize[0], htrans[0], beat_ctr},
+clkena_st2)
 
 // Pipe Stage 3 (HRDATA)
 
-assign clkena_st3       =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
-assign {dav_nxt, data_nxt, rd_addr_nxt} = clkena_st3 ?
-       {~hwrite[1], i_hrdata, haddr[1]} : {1'd0, o_rd_data, o_rd_data_addr};
+assign clkena_st3  =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
 
-`FREEAHB_FF({o_rd_data_dav, o_rd_data, o_rd_data_addr},
-            {dav_nxt, data_nxt, rd_addr_nxt}, 1'd1)
+assign rd_dav_nxt  = clkena_st3 & ~hwrite[1];
+assign rd_data_nxt = i_hrdata >> data_rota('d1, hsize[1], haddr[1]);
+
+`FREEAHB_FF({o_rd_data, o_rd_data_addr}, {rd_data_nxt, haddr[1]}, clkena_st3)
+`FREEAHB_FF(o_rd_data_dav, rd_dav_nxt, 1'd1)
 
 // Error detect.
 
-assign err  = ~((beat_ctr >= 'sd0) & (burst_ctr >= 'sd0) & (burst_ctr <= 'sd16));
+assign err = ~((beat_ctr >= 'sd0) & (burst_ctr >= 'sd0) & (burst_ctr <= 'sd16));
 
 `FREEAHB_FF(o_err, err, 1'd1)
 
 endmodule : ahb_manager
 
-// ----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // END OF FILE
-// ----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
