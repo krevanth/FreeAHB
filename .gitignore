@@ -1,4 +1,4 @@
-#  Copyright (C) 2017-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
+#  Copyright (C)2016-2024 Revanth Kamaraj (krevanth) <revanth91kamaraj@gmail.com>
 #
 #  Permission is hereby granted, free of charge, to any person obtaining a copy
 #  of this software and associated documentation files (the "Software"), to deal

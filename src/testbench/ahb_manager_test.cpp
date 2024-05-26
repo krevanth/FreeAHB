@@ -25,6 +25,7 @@
 
 int err = 0;
 
+// Just a standard Verilator template to drive clock.
 int main(int argc, char **argv, char** env) {
     const std::unique_ptr<VerilatedContext> contextp{new VerilatedContext};
 
