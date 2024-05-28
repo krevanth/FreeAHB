@@ -6,6 +6,8 @@
 
 **IMPORTANT: Note that [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) was unintentionally deleted but has now been restored to the same URL from backups on 22/05/2024. Sadly, the fork list, issues, stars and watchers couldn't be restored. DUE TO THESE ISSUES, ALL PREVIOUS FORKS OF https://github.com/krevanth/FreeAHB REPO HAVE BEEN DETACHED FROM IT.**
 
+**DATE OF FIRST COMMIT: Nov 18 2016. [View First Commit](https://github.com/krevanth/FreeAHB/commit/20682c989cdf5b7a5986d16f147323cdf7703c67)**
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
