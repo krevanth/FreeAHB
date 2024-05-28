@@ -2,11 +2,17 @@
 
 **Copyright (C) 2016-2024 [Revanth Kamaraj](https://github.com/krevanth) (krevanth) <<revanth91kamaraj@gmail.com>>**
 
-**IMPORTANT: PLEASE VERIFY THAT YOU ARE VIEWING THE ORIGINAL REPO AT [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) TO AVOID ACCIDENTIALLY LOOKING AT FORKS/DETACHED FORKS/UNCONTROLLED COPIES.**
+**IMPORTANT:**
 
-**IMPORTANT: Note that [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) was unintentionally deleted but has now been restored to the same URL from backups on 22/05/2024. Sadly, the fork list, issues, stars and watchers couldn't be restored. DUE TO THESE ISSUES, ALL PREVIOUS FORKS OF https://github.com/krevanth/FreeAHB REPO HAVE BEEN DETACHED FROM IT.**
+- Note that [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) was unintentionally deleted but has now been restored to the same URL from backups on 22/05/2024. Sadly, the fork list, issues, stars and watchers couldn't be restored.
+- DUE TO THE ABOVE, ALL PREVIOUS FORKS OF https://github.com/krevanth/FreeAHB REPO HAVE BEEN DETACHED FROM IT.
+- DUE TO THE ABOVE, PLEASE VERIFY THAT YOU ARE VIEWING THE ORIGINAL REPO AT [https://github.com/krevanth/FreeAHB](https://github.com/krevanth/FreeAHB) TO AVOID ACCIDENTIALLY LOOKING AT FORKS/DETACHED FORKS/UNCONTROLLED COPIES.
 
-**DATE OF FIRST COMMIT: Nov 18 2016. [View First Commit](https://github.com/krevanth/FreeAHB/commit/20682c989cdf5b7a5986d16f147323cdf7703c67)**
+**REPO CREATION DATE / FIRST COMMIT DATE: Nov 18 2016. [View First Commit](https://github.com/krevanth/FreeAHB/commit/20682c989cdf5b7a5986d16f147323cdf7703c67) ( Author=REVANTH KAMARAJ (KREVANTH) Hash=20682c989cdf5b7a5986d16f147323cdf7703c67 )**
+
+## License
+
+**Copyright (C) 2016-2024 [Revanth Kamaraj](https://github.com/krevanth) (krevanth) <<revanth91kamaraj@gmail.com>>**
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
