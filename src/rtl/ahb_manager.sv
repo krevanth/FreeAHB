@@ -60,7 +60,7 @@ input  logic                  i_idle,
 input  logic                  i_wr,
 input  logic   [DATA_WDT-1:0] i_wr_data,
 input  logic   [31:0]         i_addr,
-input  logic   [31:0]         i_mask,
+input  logic                  i_wrap,
 input  logic   [2:0]          i_size,
 input  logic   [15:0]         i_min_len,
 input  logic                  i_first_xfer,
@@ -69,7 +69,6 @@ output logic   [DATA_WDT-1:0] o_rd_data,
 output logic   [31:0]         o_rd_data_addr,
 output logic                  o_rd_data_dav );
 
-logic [9:3][1:0][DATA_WDT-1:0] wgen;
 logic signed [5:0]    burst_ctr, burst_ctr_nxt, burst_ctr_nxt_sc;
 logic signed [16:0]   beat, beat_ctr, beat_ctr_burst, beat_ctr_rcmp,
                       beat_ctr_nxt, beatx;
@@ -83,8 +82,8 @@ logic [2:0]           hwrite;
 logic [2:0][31:0]     mask;
 logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc;
 logic [2:0][31:0]     haddr;
-logic [31:0]          addr_rcmp, addr_mask, addr_sc, mask0_nxt,
-                      addr_burst, haddr0_nxt, x_mask, x_addr;
+logic [31:0]          addr_rcmp, addr_sc, mask0_nxt, addr_burst, haddr0_nxt,
+                      x_mask, x_addr, addr_sc_sc;
 logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       term_bc_no_incr,first_xfer, nonburst, rcmp_brst_sc,
                       recompute_brst, hbusreq_nxt, ui_idle, clkena_st1,
@@ -92,10 +91,12 @@ logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
                       clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
                       htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
-                      started, started_nxt;
+                      started, started_nxt, x_wrap, htrans0_busy1k;
 logic [15:0]          x_min_len;
-logic [2:0][DATA_WDT-1:0] hwdata;
-logic [DATA_WDT + 85:0]   skid_buffer_mem_nxt, skid_buffer_mem;
+logic [9:3][1:0][DATA_WDT-1:0]  wgen;
+logic [2:0][DATA_WDT-1:0]       hwdata;
+logic [1:0][DATA_WDT + 54:0]    skid_buffer_mem_nxt, skid_buffer_mem;
+logic [DATA_WDT + 54:0]         skid_buffer_mem1_nxt;
 
 // Functions.
 
@@ -118,12 +119,22 @@ endfunction : burst_cross
 function automatic logic [DATA_WDT-1:0] data_rota // Get data rotate amount.
 ( logic src, t_hsize sz, logic [31:0] addr );
     for(int i=3;i<=9;i++) begin
-        if (({29'd0, sz} + 'd3 == i) && (DATA_WDT > ('d1 << i))) begin
+        if (({29'd0, sz} + 'd3 == i) & (DATA_WDT > ('d1 << i))) begin
             return wgen[i][src];
         end
     end
     return 'd0;
 endfunction : data_rota
+
+function automatic logic [31:0] get_mask // Compute mask internally.
+( logic [15:0] min_len, t_hsize size );
+    logic [31:0] prod;
+    prod = min_len * ('d1 << size);
+    for(int i=16;i>=0;i--) begin
+        if(prod[i]) return (('d1 << i) - 'd1);
+    end
+    return 'd0;
+endfunction
 
 // Signal aliases.
 
@@ -132,6 +143,7 @@ for(genvar i=3;i<=9;i++) begin : l_wgen_outer_loop
         assign wgen[i][0] =
         {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
         haddr0_nxt[$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
+
         assign wgen[i][1] =
         {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
         haddr[1][$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
@@ -141,14 +153,10 @@ for(genvar i=3;i<=9;i++) begin : l_wgen_outer_loop
     end : l_wgen_inner_loop_else
 end : l_wgen_outer_loop
 
-for(genvar i=0;i<32;i++) begin : l_addr_nxt
-    assign addr_mask[i] = x_mask[i] ? haddr[0][i] : addr_sc[i];
-end : l_addr_nxt
-
 assign htrans0_idle    = htrans[0] == IDLE;
 assign htrans1_idle    = htrans[1] == IDLE;
 assign htrans0_busy    = htrans[0] == BUSY;
-assign hresp_splt_ret  = i_hresp inside {SPLIT, RETRY};
+assign hresp_splt_ret  = i_hresp   inside {SPLIT, RETRY};
 assign htrans1_sq_nsq  = htrans[1] inside {SEQ, NONSEQ};
 assign htrans2_sq_nsq  = htrans[2] inside {SEQ, NONSEQ};
 assign hready_grant    = i_hready & i_hgrant;
@@ -156,9 +164,12 @@ assign rd_wr           = x_rd | x_wr;
 assign ui_idle         = x_first_xfer & ~x_rd & ~x_wr;
 assign first_xfer      = x_first_xfer & rd_wr;
 assign spl_ret_cyc_1   = gnt[0] & ~i_hready & hresp_splt_ret;
-assign boundary_1k     = addr_mask[31:10] != haddr[0][31:10];
-assign nonburst        = boundary_1k | (addr_mask < addr_sc);
+assign boundary_1k     = addr_sc[31:10] != haddr[0][31:10];
+assign nonburst        = boundary_1k | ( addr_sc < haddr[0] );
 assign term_bc_no_incr = (burst_ctr == 'd1) & (o_hburst != INCR);
+assign htrans0_busy1k  = htrans0_busy
+                       & (~|haddr[0][9:0] | ((haddr[0] & ~x_mask) == haddr[0]))
+                       & rd_wr;
 
 // Output drivers.
 
@@ -173,26 +184,32 @@ assign next =   ~htrans2_sq_nsq & ~spl_ret_cyc_1 &
 assign gnt_nxt     = spl_ret_cyc_1 ? 2'd0 : i_hready ? {gnt[0], i_hgrant} : gnt;
 assign hbusreq_nxt = rd_wr | ~x_first_xfer | ~htrans1_idle;
 
-`FREEAHB_FF({o_hbusreq, gnt, o_stall}, {hbusreq_nxt, gnt_nxt, ~next}, 1'd1)
+`FREEAHB_FF({o_hbusreq, gnt}, {hbusreq_nxt, gnt_nxt}, 1'd1)
 
-// Skid buffer (Registers output stall but passes inputs through 2:1 MUX).
+// Skid buffer.
 
-assign skid_buffer_mem_nxt =
-{i_wr_data, i_wr & ~i_idle, i_rd & ~i_idle, i_min_len, i_mask, i_addr, i_size,
- i_first_xfer | i_idle};
+`FREEAHB_FF(o_stall, ~next, 1'd1)
 
-assign {x_wr_data, x_wr, x_rd, x_min_len, x_mask, x_addr, x_size, x_first_xfer}
-= ~o_stall ? skid_buffer_mem_nxt : skid_buffer_mem;
+assign {x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer}
+= o_stall ? skid_buffer_mem[0] : skid_buffer_mem[1];
 
-`FREEAHB_FF(skid_buffer_mem, skid_buffer_mem_nxt, ~o_stall)
+`FREEAHB_FF(skid_buffer_mem[0], skid_buffer_mem[1], ~o_stall) // Skid reg.
+
+assign skid_buffer_mem1_nxt =
+{i_wr_data, i_wr & ~i_idle, i_rd & ~i_idle, i_min_len, i_wrap, i_addr,
+ i_size, i_first_xfer | i_idle};
+
+`FREEAHB_FF(skid_buffer_mem[1], skid_buffer_mem1_nxt, ~o_stall) // Input reg.
 
 // Pipe Stage 1 (ADDR)
+
+assign x_mask = x_wrap ? get_mask ( x_min_len, x_size ) : 'd0;
 
 assign pend_split_nxt   = spl_ret_cyc_1 ? 1'd1 :
                           (hready_grant ? 1'd0 : pend_split);
 assign rcmp_brst_sc     = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans0_idle,
-                            nonburst};
-assign recompute_brst   = (htrans[0] != BUSY) & rcmp_brst_sc;
+                            nonburst, htrans0_busy1k};
+assign recompute_brst   = (~htrans0_busy | htrans0_busy1k) & rcmp_brst_sc;
 
 assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
         spl_ret_cyc_1  ? { mask[0] , hwdata[0] , hwrite[0] , hsize[0] } :
@@ -216,9 +233,15 @@ assign haddr0_nxt = spl_ret_cyc_1  ? haddr[0] :
                     ui_idle        ? haddr[0] :
                     recompute_brst ? addr_rcmp : addr_burst;
 
-assign addr_sc = (haddr[0] + ({31'd0, rd_wr} << x_size));
+assign addr_sc_sc = htrans0_busy ? haddr[0] :
+                    (haddr[0] + ({31'd0, rd_wr} << x_size));
+
+for(genvar i=0;i<32;i++) begin : l_addr_sc
+    assign addr_sc[i] = x_mask[i] ? haddr[0][i] : addr_sc_sc[i];
+end : l_addr_sc
+
 assign addr_rcmp   = x_first_xfer ? x_addr : addr_sc;
-assign addr_burst  = (haddr[0] + ((~htrans0_busy ? 'd1 : 'd0) << x_size));
+assign addr_burst  = haddr[0] + ((htrans0_busy ? 'd0 : 'd1) << x_size);
 
 assign beat_ctr_nxt = spl_ret_cyc_1  ? beat_ctr :
                       pend_split     ? beat     :

@@ -33,7 +33,7 @@ module ahb_manager_test import tb_pack::*; (input  i_hclk, output logic sim_err 
 parameter DATA_WDT  = 32;
 parameter MAX_LEN   = 8;
 parameter MIN_LEN   = 4;
-parameter BASE_ADDR = 'h100;
+parameter BASE_ADDR = 'h3FF;
 
 localparam MEM_SIZE = MAX_LEN;
 localparam BEAT_WDT = 16;
@@ -55,7 +55,7 @@ logic                  o_next;
 logic   [DATA_WDT-1:0] i_data;
 bit      [31:0]        i_addr;
 t_hsize                i_size = W8;
-bit      [31:0]        i_mask;
+bit                    i_wrap;
 bit                    i_wr;
 bit                    i_rd;
 bit     [BEAT_WDT-1:0] i_min_len;
