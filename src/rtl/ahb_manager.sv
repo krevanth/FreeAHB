@@ -91,11 +91,11 @@ logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
                       clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
                       htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
-                      started, started_nxt, x_wrap, htrans0_busy1k;
+                      x_wrap, htrans0_busy1k;
 logic [15:0]          x_min_len;
 logic [9:3][1:0][DATA_WDT-1:0]  wgen;
 logic [2:0][DATA_WDT-1:0]       hwdata;
-logic [1:0][DATA_WDT + 54:0]    skid_buffer_mem_nxt, skid_buffer_mem;
+logic [1:0][DATA_WDT + 54:0]    skid_buffer_mem;
 logic [DATA_WDT + 54:0]         skid_buffer_mem1_nxt;
 
 // Functions.
