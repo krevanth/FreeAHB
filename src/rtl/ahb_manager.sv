@@ -92,30 +92,34 @@ logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
                       clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
                       htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
-                      x_wrap, htrans0_busy1k, rd_int, wr_int, fxfer;
+                      x_wrap, htrans0_busy1k, rd_int, wr_int, fxfer, unused_ok;
 logic [15:0]          x_min_len;
 logic [9:3][1:0][DATA_WDT-1:0] wgen;
 logic [2:0][DATA_WDT-1:0]      hwdata;
 logic [2:0][DATA_WDT+86:0]     skbuf_mem, skbuf_mem_nxt;
 
+assign unused_ok = |{1'd1, x_wrap};
+
 function automatic logic [8:0] compute_hburst // Predict HBURST.
-( logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] mask );
-return ((|val[15:4]) & ~burst_cross(addr, 'd15, sz, mask)) ? {INCR16,6'd16} :
-       ((|val[15:3]) & ~burst_cross(addr, 'd7,  sz, mask)) ? {INCR8, 6'd8}  :
-       ((|val[15:2]) & ~burst_cross(addr, 'd3,  sz, mask)) ? {INCR4, 6'd4}  :
-                                                             {INCR,6'd0};
+( logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] imask );
+logic unused;
+unused = |{1'd1, val[1:0]};
+return ((|val[15:4]) & ~burst_cross(addr, 'd15, sz, imask)) ? {INCR16,6'd16} :
+       ((|val[15:3]) & ~burst_cross(addr, 'd7,  sz, imask)) ? {INCR8, 6'd8}  :
+       ((|val[15:2]) & ~burst_cross(addr, 'd3,  sz, imask)) ? {INCR4, 6'd4}  :
+                                                              {INCR,6'd0};
 endfunction : compute_hburst
 
 function automatic logic burst_cross // Will we cross 1K or wrap boundary.
-( logic [31:0] addr, logic [31:0] val, logic [2:0] sz, logic [31:0] mask );
+( logic [31:0] addr, logic [31:0] val, logic [2:0] sz, logic [31:0] imask );
     logic [1:0][31:0] laddr;
     laddr[0] = addr + (val << (1 << sz));
-    for(int i=0;i<32;i++) laddr[1][i] = mask[i] ? addr[i] : laddr[0][i];
+    for(int i=0;i<32;i++) laddr[1][i] = imask[i] ? addr[i] : laddr[0][i];
     burst_cross = ( laddr[1][31:10] != addr[31:10] ) | ( laddr[1] < addr );
 endfunction : burst_cross
 
 function automatic logic [DATA_WDT-1:0] data_rota // Get data rotate amount.
-( logic src, t_hsize sz, logic [31:0] addr );
+( logic src, t_hsize sz );
     for(int i=3;i<=9;i++) begin
         if (({29'd0, sz} + 'd3 == i) & (DATA_WDT > ('d1 << i))) begin
             return wgen[i][src];
@@ -216,7 +220,7 @@ assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
         htrans2_sq_nsq ? { mask[2] , hwdata[2] , hwrite[2] , hsize[2] } :
                          { x_mask  , hwdata0_sc , x_wr      , x_size  } ;
 
-assign rot_amt     = data_rota('d0, x_size, haddr0_nxt);
+assign rot_amt     = data_rota('d0, x_size);
 assign hwdata0_sc  = x_wr_data << rot_amt;
 assign clkena_st1  = spl_ret_cyc_1 | hready_grant;
 
@@ -290,7 +294,7 @@ clkena_st2)
 
 assign clkena_st3  =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
 assign rd_dav_nxt  = clkena_st3 & ~hwrite[1];
-assign rot_amt_1   = data_rota('d1, hsize[1], haddr[1]);
+assign rot_amt_1   = data_rota('d1, hsize[1]);
 assign rd_data_nxt = i_hrdata >> rot_amt_1;
 
 `FREEAHB_FF({o_rd_data, o_rd_data_addr}, {rd_data_nxt, haddr[1]}, clkena_st3)

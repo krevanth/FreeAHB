@@ -59,28 +59,28 @@ reset: clean
 runlint: lt0 lt1 lt2 lt3 lt4 lt5 lt6 lt7 lt8
 
 lt0:
-	verilator -GDATA_WDT=8 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=8 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt1:
-	verilator -GDATA_WDT=16 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=16 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt2:
-	verilator -GDATA_WDT=32 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=32 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt3:
-	verilator -GDATA_WDT=64 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=64 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt4:
-	verilator -GDATA_WDT=128 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=128 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt5:
-	verilator -GDATA_WDT=256 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=256 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt6:
-	verilator -GDATA_WDT=512 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=512 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt7:
-	verilator -GDATA_WDT=1024 --lint-only src/rtl/ahb_manager.sv 
+	verilator -GDATA_WDT=1024 --lint-only --assert --report-unoptflat --clk i_hclk --top-module ahb_manager -Wall -Wpedantic -Wwarn-lint -Wwarn-style -Wwarn-MULTIDRIVEN -Wwarn-IMPERFECTSCH src/rtl/ahb_manager.sv 
 
 lt8:
 	/root/.cargo/bin/svlint src/rtl/ahb_manager.sv 
