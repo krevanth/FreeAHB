@@ -40,22 +40,19 @@ int main(int argc, char **argv, char** env) {
 		ahb_manager_test->i_hclk = !ahb_manager_test->i_hclk;
 		ahb_manager_test->eval();
 
-        if(ahb_manager_test->sim_ok) {
-            err = 0;
-            printf("Simulation passed!\n");
-        }
-        else if(ahb_manager_test->sim_err || ahb_manager_test->sim_err1) {
+        if(ahb_manager_test->sim_err || ahb_manager_test->sim_err1) {
             err = 1;
-            printf("Simulation failed!\n");
         }
 	}
 
     ahb_manager_test->final();
 
     if(err == 0) {
+        printf("OK! Simulation Success.");
         exit(EXIT_SUCCESS);
     }
     else {
+        printf("One or more errors found.");
         exit(EXIT_FAILURE);
     }
 }

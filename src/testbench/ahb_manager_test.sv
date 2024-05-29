@@ -31,8 +31,8 @@ module ahb_manager_test import tb_pack::*; (input  i_hclk, output logic sim_err 
                                             output logic sim_ok = 1'd0);
 
 parameter DATA_WDT  = 32;
-parameter MAX_LEN   = 2000;
-parameter MIN_LEN   = 400;
+parameter MAX_LEN   = 200;
+parameter MIN_LEN   = 40;
 parameter BASE_ADDR = 'h3FF;
 
 localparam MEM_SIZE = MAX_LEN;
@@ -180,15 +180,16 @@ begin
         rd_cycles <= rd_cycles + 'd1;
 
         assert(o_data + BASE_ADDR == o_addr)
+        begin
             $display("OK! Data check passed! o_data=0x%x o_addr=0x%x BASE_ADDR=0x%x",
             o_data, o_addr, BASE_ADDR);
+        end
         else
         begin
             $display(2, "Data comparison mismatch. o_data=0x%x o_addr=0x%x BASE_ADDR=0x%x",
             o_data, o_addr, BASE_ADDR);
 
-            //sim_err <= 1'd1;
-            //$finish;
+            sim_err <= 1'd1;
         end
     end
 

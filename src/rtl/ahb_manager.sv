@@ -80,7 +80,8 @@ t_hsize               hsize  [3];
 t_hsize               hsize0_nxt, x_size;
 logic [2:0]           hwrite;
 logic [2:0][31:0]     mask;
-logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc;
+logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc, rot_amt,
+                      rot_amt_1;
 logic [2:0][31:0]     haddr;
 logic [31:0]          addr_rcmp, addr_sc, mask0_nxt, addr_burst, haddr0_nxt,
                       x_mask, x_addr, addr_sc_sc, mask_precmp;
@@ -184,12 +185,12 @@ assign hbusreq_nxt = rd_wr | ~x_first_xfer | ~htrans1_idle;
 // 2 Way Skid buffer (Basically 2 deep sync FIFO).
 
 `FREEAHB_FF(o_stall     , ~next           , 1'd1)
-`FREEAHB_FF(skbuf_mem[0], skbuf_mem_nxt[0], ~o_stall) 
-`FREEAHB_FF(skbuf_mem[1], skbuf_mem_nxt[1], ~o_stall) 
-`FREEAHB_FF(skbuf_mem[2], skbuf_mem_nxt[2], ~o_stall) 
+`FREEAHB_FF(skbuf_mem[0], skbuf_mem_nxt[0], ~o_stall)
+`FREEAHB_FF(skbuf_mem[1], skbuf_mem_nxt[1], ~o_stall)
+`FREEAHB_FF(skbuf_mem[2], skbuf_mem_nxt[2], ~o_stall)
 
-assign 
-{x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer, x_mask} 
+assign
+{x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer, x_mask}
 =  o_stall ? skbuf_mem[0] : skbuf_mem[1] ;
 
 assign mask_precmp      = i_wrap ? get_mask ( i_min_len, i_size ) : 'd0;
@@ -198,7 +199,7 @@ assign wr_int           = i_wr & ~i_idle;
 assign fxfer            = i_first_xfer | i_idle;
 assign skbuf_mem_nxt[0] = skbuf_mem[1];
 assign skbuf_mem_nxt[1] = skbuf_mem[2] | {{(DATA_WDT+55){1'd0}}, mask_precmp};
-assign skbuf_mem_nxt[2] = 
+assign skbuf_mem_nxt[2] =
 {i_wr_data, wr_int, rd_int, i_min_len, i_wrap, i_addr, i_size, fxfer, 32'd0};
 
 // Pipe Stage 1 (ADDR)
@@ -215,15 +216,16 @@ assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
         htrans2_sq_nsq ? { mask[2] , hwdata[2] , hwrite[2] , hsize[2] } :
                          { x_mask  , hwdata0_sc , x_wr      , x_size  } ;
 
-assign hwdata0_sc  = x_wr_data << data_rota('d0, x_size, haddr0_nxt);
+assign rot_amt     = data_rota('d0, x_size, haddr0_nxt);
+assign hwdata0_sc  = x_wr_data << rot_amt;
 assign clkena_st1  = spl_ret_cyc_1 | hready_grant;
 
-assign {haddr0_nxt, htrans0_nxt} = 
+assign {haddr0_nxt, htrans0_nxt} =
 spl_ret_cyc_1  ? {haddr[0], IDLE}   :
 pend_split     ? {haddr[1], NONSEQ} :
 htrans2_sq_nsq ? {haddr[2], NONSEQ} :
 ui_idle        ? {haddr[0], IDLE}   :
-recompute_brst ? 
+recompute_brst ?
  {rd_wr ? {addr_rcmp, NONSEQ} : {haddr[0], IDLE}} :
  {addr_burst, rd_wr ? SEQ : BUSY};
 
@@ -241,7 +243,7 @@ assign beat_ctr_nxt = spl_ret_cyc_1  ? beat_ctr :
                       ui_idle        ? beat_ctr :
                       recompute_brst ? beat_ctr_rcmp : beat_ctr_burst;
 
-assign beat_ctr_burst = hburst == INCR ? beat_ctr : 
+assign beat_ctr_burst = hburst == INCR ? beat_ctr :
                         (beat_ctr - (rd_wr ? 'd1 : 'd0));
 
 assign beat_ctr_rcmp  = x_first_xfer ? {1'd0, x_min_len} : beat_ctr_burst;
@@ -253,7 +255,7 @@ ui_idle        ? {hburst, burst_ctr}                                           :
 recompute_brst ? compute_hburst(beat_ctr_rcmp[15:0], addr_rcmp, x_size, x_mask):
                  {hburst, burst_ctr_nxt_sc};
 
-assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr : 
+assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr :
                           (burst_ctr - (rd_wr ? 'd1 : 'd0));
 
 `FREEAHB_FF({
@@ -288,7 +290,8 @@ clkena_st2)
 
 assign clkena_st3  =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
 assign rd_dav_nxt  = clkena_st3 & ~hwrite[1];
-assign rd_data_nxt = i_hrdata >> data_rota('d1, hsize[1], haddr[1]);
+assign rot_amt_1   = data_rota('d1, hsize[1], haddr[1]);
+assign rd_data_nxt = i_hrdata >> rot_amt_1;
 
 `FREEAHB_FF({o_rd_data, o_rd_data_addr}, {rd_data_nxt, haddr[1]}, clkena_st3)
 `FREEAHB_FF(o_rd_data_dav, rd_dav_nxt, 1'd1)
