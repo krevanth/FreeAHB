@@ -61,7 +61,7 @@ input  logic                  i_wr,
 input  logic   [DATA_WDT-1:0] i_wr_data,
 input  logic   [31:0]         i_addr,
 input  logic                  i_wrap,
-input  logic   [2:0]          i_size,
+input          t_hsize        i_size,
 input  logic   [15:0]         i_min_len,
 input  logic                  i_first_xfer,
 input  logic                  i_rd,
@@ -83,7 +83,7 @@ logic [2:0][31:0]     mask;
 logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc;
 logic [2:0][31:0]     haddr;
 logic [31:0]          addr_rcmp, addr_sc, mask0_nxt, addr_burst, haddr0_nxt,
-                      x_mask, x_addr, addr_sc_sc;
+                      x_mask, x_addr, addr_sc_sc, mask_precmp;
 logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       term_bc_no_incr,first_xfer, nonburst, rcmp_brst_sc,
                       recompute_brst, hbusreq_nxt, ui_idle, clkena_st1,
@@ -91,14 +91,11 @@ logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
                       clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
                       htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
-                      x_wrap, htrans0_busy1k;
+                      x_wrap, htrans0_busy1k, rd_int, wr_int, fxfer;
 logic [15:0]          x_min_len;
-logic [9:3][1:0][DATA_WDT-1:0]  wgen;
-logic [2:0][DATA_WDT-1:0]       hwdata;
-logic [1:0][DATA_WDT + 54:0]    skid_buffer_mem;
-logic [DATA_WDT + 54:0]         skid_buffer_mem1_nxt;
-
-// Functions.
+logic [9:3][1:0][DATA_WDT-1:0] wgen;
+logic [2:0][DATA_WDT-1:0]      hwdata;
+logic [2:0][DATA_WDT+86:0]     skbuf_mem, skbuf_mem_nxt;
 
 function automatic logic [8:0] compute_hburst // Predict HBURST.
 ( logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] mask );
@@ -135,8 +132,6 @@ function automatic logic [31:0] get_mask // Compute mask internally.
     end
     return 'd0;
 endfunction
-
-// Signal aliases.
 
 for(genvar i=3;i<=9;i++) begin : l_wgen_outer_loop
     if(DATA_WDT > ('d1 << i)) begin : l_wgen_inner_loop_if
@@ -186,30 +181,33 @@ assign hbusreq_nxt = rd_wr | ~x_first_xfer | ~htrans1_idle;
 
 `FREEAHB_FF({o_hbusreq, gnt}, {hbusreq_nxt, gnt_nxt}, 1'd1)
 
-// Skid buffer.
+// 2 Way Skid buffer (Basically 2 deep sync FIFO).
 
-`FREEAHB_FF(o_stall, ~next, 1'd1)
+`FREEAHB_FF(o_stall     , ~next           , 1'd1)
+`FREEAHB_FF(skbuf_mem[0], skbuf_mem_nxt[0], ~o_stall) 
+`FREEAHB_FF(skbuf_mem[1], skbuf_mem_nxt[1], ~o_stall) 
+`FREEAHB_FF(skbuf_mem[2], skbuf_mem_nxt[2], ~o_stall) 
 
-assign {x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer}
-= o_stall ? skid_buffer_mem[0] : skid_buffer_mem[1];
+assign 
+{x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer, x_mask} 
+=  o_stall ? skbuf_mem[0] : skbuf_mem[1] ;
 
-`FREEAHB_FF(skid_buffer_mem[0], skid_buffer_mem[1], ~o_stall) // Skid reg.
-
-assign skid_buffer_mem1_nxt =
-{i_wr_data, i_wr & ~i_idle, i_rd & ~i_idle, i_min_len, i_wrap, i_addr,
- i_size, i_first_xfer | i_idle};
-
-`FREEAHB_FF(skid_buffer_mem[1], skid_buffer_mem1_nxt, ~o_stall) // Input reg.
+assign mask_precmp      = i_wrap ? get_mask ( i_min_len, i_size ) : 'd0;
+assign rd_int           = i_rd & ~i_idle;
+assign wr_int           = i_wr & ~i_idle;
+assign fxfer            = i_first_xfer | i_idle;
+assign skbuf_mem_nxt[0] = skbuf_mem[1];
+assign skbuf_mem_nxt[1] = skbuf_mem[2] | {{(DATA_WDT+55){1'd0}}, mask_precmp};
+assign skbuf_mem_nxt[2] = 
+{i_wr_data, wr_int, rd_int, i_min_len, i_wrap, i_addr, i_size, fxfer, 32'd0};
 
 // Pipe Stage 1 (ADDR)
 
-assign x_mask = x_wrap ? get_mask ( x_min_len, x_size ) : 'd0;
+assign pend_split_nxt = spl_ret_cyc_1 | (hready_grant ? 1'd0 : pend_split);
+assign recompute_brst = (~htrans0_busy | htrans0_busy1k) & rcmp_brst_sc;
 
-assign pend_split_nxt   = spl_ret_cyc_1 ? 1'd1 :
-                          (hready_grant ? 1'd0 : pend_split);
-assign rcmp_brst_sc     = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans0_idle,
-                            nonburst, htrans0_busy1k};
-assign recompute_brst   = (~htrans0_busy | htrans0_busy1k) & rcmp_brst_sc;
+assign rcmp_brst_sc   = |{first_xfer, ~gnt[0], term_bc_no_incr, htrans0_idle,
+                          nonburst, htrans0_busy1k};
 
 assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
         spl_ret_cyc_1  ? { mask[0] , hwdata[0] , hwrite[0] , hsize[0] } :
@@ -220,38 +218,33 @@ assign {mask0_nxt, hwdata0_nxt, hwrite0_nxt, hsize0_nxt} =
 assign hwdata0_sc  = x_wr_data << data_rota('d0, x_size, haddr0_nxt);
 assign clkena_st1  = spl_ret_cyc_1 | hready_grant;
 
-assign htrans0_nxt = spl_ret_cyc_1  ? IDLE   :
-                     pend_split     ? NONSEQ :
-                     htrans2_sq_nsq ? NONSEQ :
-                     ui_idle        ? IDLE   :
-                     recompute_brst ? (rd_wr ? NONSEQ : IDLE) :
-                     (rd_wr ? SEQ : BUSY);
+assign {haddr0_nxt, htrans0_nxt} = 
+spl_ret_cyc_1  ? {haddr[0], IDLE}   :
+pend_split     ? {haddr[1], NONSEQ} :
+htrans2_sq_nsq ? {haddr[2], NONSEQ} :
+ui_idle        ? {haddr[0], IDLE}   :
+recompute_brst ? 
+ {rd_wr ? {addr_rcmp, NONSEQ} : {haddr[0], IDLE}} :
+ {addr_burst, rd_wr ? SEQ : BUSY};
 
-assign haddr0_nxt = spl_ret_cyc_1  ? haddr[0] :
-                    pend_split     ? haddr[1] :
-                    htrans2_sq_nsq ? haddr[2] :
-                    ui_idle        ? haddr[0] :
-                    recompute_brst ? addr_rcmp : addr_burst;
-
-assign addr_sc_sc = htrans0_busy ? haddr[0] :
-                    (haddr[0] + ({31'd0, rd_wr} << x_size));
+assign addr_sc_sc = haddr[0] + ({31'd0, ~htrans0_busy} << x_size);
 
 for(genvar i=0;i<32;i++) begin : l_addr_sc
     assign addr_sc[i] = x_mask[i] ? haddr[0][i] : addr_sc_sc[i];
 end : l_addr_sc
 
-assign addr_rcmp   = x_first_xfer ? x_addr : addr_sc;
-assign addr_burst  = haddr[0] + ((htrans0_busy ? 'd0 : 'd1) << x_size);
-
+assign addr_rcmp    = x_first_xfer ? x_addr : addr_sc;
+assign addr_burst   = haddr[0] + ((htrans0_busy ? 'd0 : 'd1) << x_size);
 assign beat_ctr_nxt = spl_ret_cyc_1  ? beat_ctr :
                       pend_split     ? beat     :
                       htrans2_sq_nsq ? beatx    :
                       ui_idle        ? beat_ctr :
                       recompute_brst ? beat_ctr_rcmp : beat_ctr_burst;
 
-assign beat_ctr_burst = hburst == INCR ? beat_ctr : (beat_ctr - {'d17{rd_wr}});
-assign beat_ctr_rcmp  = x_first_xfer ? {1'd0, x_min_len} : beat_ctr_burst;
+assign beat_ctr_burst = hburst == INCR ? beat_ctr : 
+                        (beat_ctr - (rd_wr ? 'd1 : 'd0));
 
+assign beat_ctr_rcmp  = x_first_xfer ? {1'd0, x_min_len} : beat_ctr_burst;
 assign {hburst_nxt, burst_ctr_nxt} =
 spl_ret_cyc_1  ? {hburst, burst_ctr}                                           :
 pend_split     ? compute_hburst(beat [15:0], haddr[1], hsize[1], mask[1])      :
@@ -260,8 +253,8 @@ ui_idle        ? {hburst, burst_ctr}                                           :
 recompute_brst ? compute_hburst(beat_ctr_rcmp[15:0], addr_rcmp, x_size, x_mask):
                  {hburst, burst_ctr_nxt_sc};
 
-assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr :
-                          (burst_ctr - {'d6{rd_wr}});
+assign burst_ctr_nxt_sc = hburst == INCR ? burst_ctr : 
+                          (burst_ctr - (rd_wr ? 'd1 : 'd0));
 
 `FREEAHB_FF({
 pend_split,     htrans[0],   haddr[0],   beat_ctr,     burst_ctr, hburst
@@ -294,7 +287,6 @@ clkena_st2)
 // Pipe Stage 3 (HRDATA)
 
 assign clkena_st3  =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
-
 assign rd_dav_nxt  = clkena_st3 & ~hwrite[1];
 assign rd_data_nxt = i_hrdata >> data_rota('d1, hsize[1], haddr[1]);
 
