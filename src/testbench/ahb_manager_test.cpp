@@ -48,11 +48,11 @@ int main(int argc, char **argv, char** env) {
     ahb_manager_test->final();
 
     if(err == 0) {
-        printf("OK! Simulation Success.");
+        printf("OK! Simulation Success.\n");
         exit(EXIT_SUCCESS);
     }
     else {
-        printf("One or more errors found.");
+        printf("One or more errors found.\n");
         exit(EXIT_FAILURE);
     }
 }

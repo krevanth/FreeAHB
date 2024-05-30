@@ -81,10 +81,11 @@ t_hsize               hsize0_nxt, x_size;
 logic [2:0]           hwrite;
 logic [2:0][31:0]     mask;
 logic [DATA_WDT-1:0]  rd_data_nxt, hwdata0_nxt, x_wr_data, hwdata0_sc, rot_amt,
-                      rot_amt_1;
+                      rd_data_int, rd_rot_int, rd_rot_nxt, rd_data_fin_nxt;
 logic [2:0][31:0]     haddr;
 logic [31:0]          addr_rcmp, addr_sc, mask0_nxt, addr_burst, haddr0_nxt,
-                      x_mask, x_addr, addr_sc_sc, mask_precmp;
+                      x_mask, x_addr, addr_sc_sc, mask_precmp, prod,
+                      rd_addr_int;
 logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       term_bc_no_incr,first_xfer, nonburst, rcmp_brst_sc,
                       recompute_brst, hbusreq_nxt, ui_idle, clkena_st1,
@@ -92,13 +93,14 @@ logic                 pend_split, pend_split_nxt, spl_ret_cyc_1, boundary_1k,
                       hwrite0_nxt, htrans1_sq_nsq, htrans2_sq_nsq,
                       clkena_st1_idx2, htrans0_idle, hready_grant, htrans1_idle,
                       htrans0_busy, rd_wr, next, x_rd, x_wr, err, x_first_xfer,
-                      x_wrap, htrans0_busy1k, rd_int, wr_int, fxfer, unused_ok;
+                      x_wrap, htrans0_busy1k, rd_int, wr_int, fxfer,
+                      load_htrans, unused_ok, rd_dav_int;
 logic [15:0]          x_min_len;
-logic [9:3][1:0][DATA_WDT-1:0] wgen;
+logic [6:0][1:0][DATA_WDT-1:0] wgen;
 logic [2:0][DATA_WDT-1:0]      hwdata;
 logic [2:0][DATA_WDT+86:0]     skbuf_mem, skbuf_mem_nxt;
 
-assign unused_ok = |{1'd1, x_wrap};
+// Procedures.
 
 function automatic logic [8:0] compute_hburst // Predict HBURST.
 ( logic [15:0] val, logic [31:0] addr, logic [2:0] sz, logic [31:0] imask );
@@ -110,48 +112,71 @@ return ((|val[15:4]) & ~burst_cross(addr, 'd15, sz, imask)) ? {INCR16,6'd16} :
                                                               {INCR,6'd0};
 endfunction : compute_hburst
 
-function automatic logic burst_cross // Will we cross 1K or wrap boundary.
+function automatic logic burst_cross // Will we cross 1K or wrap boundary ?
 ( logic [31:0] addr, logic [31:0] val, logic [2:0] sz, logic [31:0] imask );
     logic [1:0][31:0] laddr;
     laddr[0] = addr + (val << (1 << sz));
+
+    // Mask=1 preserves bit.
     for(int i=0;i<32;i++) laddr[1][i] = imask[i] ? addr[i] : laddr[0][i];
     burst_cross = ( laddr[1][31:10] != addr[31:10] ) | ( laddr[1] < addr );
 endfunction : burst_cross
 
-function automatic logic [DATA_WDT-1:0] data_rota // Get data rotate amount.
-( logic src, t_hsize sz );
-    for(int i=3;i<=9;i++) begin
-        if (({29'd0, sz} + 'd3 == i) & (DATA_WDT > ('d1 << i))) begin
-            return wgen[i][src];
-        end
-    end
-    return 'd0;
+// Handles data rotation as required by AHB (Byte Lane Management).
+function automatic logic [DATA_WDT-1:0] data_rota ( logic src, t_hsize sz );
+    data_rota =
+    (({29'd0, sz} == 'd0) & (DATA_WDT >   8)) ? wgen[0][src] :
+    (({29'd0, sz} == 'd1) & (DATA_WDT >  16)) ? wgen[1][src] :
+    (({29'd0, sz} == 'd2) & (DATA_WDT >  32)) ? wgen[2][src] :
+    (({29'd0, sz} == 'd3) & (DATA_WDT >  64)) ? wgen[3][src] :
+    (({29'd0, sz} == 'd4) & (DATA_WDT > 128)) ? wgen[4][src] :
+    (({29'd0, sz} == 'd5) & (DATA_WDT > 256)) ? wgen[5][src] :
+    (({29'd0, sz} == 'd6) & (DATA_WDT > 512)) ? wgen[6][src] : 'd0;
 endfunction : data_rota
 
-function automatic logic [31:0] get_mask // Compute mask internally.
-( logic [15:0] min_len, t_hsize size );
-    logic [31:0] prod;
-    prod = min_len * ('d1 << size);
-    for(int i=16;i>=0;i--) begin
-        if(prod[i]) return (('d1 << i) - 'd1);
-    end
-    return 'd0;
+// Gets mask when using wrap mode. Takes total length in bytes as input.
+function automatic logic [31:0] get_mask ( logic [31:0] product );
+    logic unused;
+    unused = |{1'd1, product[31:17]};
+    casez(product[16:0])
+    17'b1_????_????_????_???? : return ~{16'd0, {16{1'd1}}};
+    17'b0_1???_????_????_???? : return ~{17'd0, {15{1'd1}}};
+    17'b0_01??_????_????_???? : return ~{18'd0, {14{1'd1}}};
+    17'b0_001?_????_????_???? : return ~{19'd0, {13{1'd1}}};
+    17'b0_0001_????_????_???? : return ~{20'd0, {12{1'd1}}};
+    17'b0_0000_1???_????_???? : return ~{21'd0, {11{1'd1}}};
+    17'b0_0000_01??_????_???? : return ~{22'd0, {10{1'd1}}};
+    17'b0_0000_001?_????_???? : return ~{23'd0,  {9{1'd1}}};
+    17'b0_0000_0001_????_???? : return ~{24'd0,  {8{1'd1}}};
+    17'b0_0000_0000_1???_???? : return ~{25'd0,  {7{1'd1}}};
+    17'b0_0000_0000_01??_???? : return ~{26'd0,  {6{1'd1}}};
+    17'b0_0000_0000_001?_???? : return ~{27'd0,  {5{1'd1}}};
+    17'b0_0000_0000_0001_???? : return ~{28'd0,  {4{1'd1}}};
+    17'b0_0000_0000_0000_1??? : return ~{29'd0,  {3{1'd1}}};
+    17'b0_0000_0000_0000_01?? : return ~{30'd0,  {2{1'd1}}};
+    17'b0_0000_0000_0000_001? : return ~{31'd0,  {1{1'd1}}};
+    17'b0_0000_0000_0000_0001 : return ~{32'd0};
+    default                   : return 'x; // Don't care for many synth tools.
+    endcase
 endfunction
 
-for(genvar i=3;i<=9;i++) begin : l_wgen_outer_loop
-    if(DATA_WDT > ('d1 << i)) begin : l_wgen_inner_loop_if
+// Signal aliases.
+
+for(genvar i=0;i<=6;i++) begin : l_wgen
+    if( DATA_WDT <= (2**(i+3)) ) begin : l_wgeni
+        assign wgen[i][0] = 'd0;
+        assign wgen[i][1] = 'd0;
+    end : l_wgeni
+    else begin : l_wgenj
         assign wgen[i][0] =
-        {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
-        haddr0_nxt[$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
+        {{(DATA_WDT - ($clog2(DATA_WDT/(2 ** (i+3))) + i + 3)){1'd0}},
+        haddr0_nxt[i + $clog2(DATA_WDT/(2 ** (i+3))) - 1:0], {3{1'd0}}};
 
         assign wgen[i][1] =
-        {{(DATA_WDT - $clog2(DATA_WDT/8) - i){1'd0}},
-        haddr[1][$clog2(DATA_WDT/8)-1:0], {i{1'd0}}};
-    end : l_wgen_inner_loop_if
-    else begin : l_wgen_inner_loop_else
-        assign wgen[i] = {(2*DATA_WDT){1'd0}};
-    end : l_wgen_inner_loop_else
-end : l_wgen_outer_loop
+        {{(DATA_WDT - ($clog2(DATA_WDT/(2 ** (i+3))) + i + 3)){1'd0}},
+          haddr[1][i + $clog2(DATA_WDT/(2 ** (i+3))) - 1:0], {3{1'd0}}};
+    end : l_wgenj
+end : l_wgen
 
 assign htrans0_idle    = htrans[0] == IDLE;
 assign htrans1_idle    = htrans[1] == IDLE;
@@ -159,6 +184,7 @@ assign htrans0_busy    = htrans[0] == BUSY;
 assign hresp_splt_ret  = i_hresp   inside {SPLIT, RETRY};
 assign htrans1_sq_nsq  = htrans[1] inside {SEQ, NONSEQ};
 assign htrans2_sq_nsq  = htrans[2] inside {SEQ, NONSEQ};
+assign load_htrans     = spl_ret_cyc_1 & ~htrans2_sq_nsq;
 assign hready_grant    = i_hready & i_hgrant;
 assign rd_wr           = x_rd | x_wr;
 assign ui_idle         = x_first_xfer & ~x_rd & ~x_wr;
@@ -168,7 +194,7 @@ assign boundary_1k     = addr_sc[31:10] != haddr[0][31:10];
 assign nonburst        = boundary_1k | ( addr_sc < haddr[0] );
 assign term_bc_no_incr = (burst_ctr == 'd1) & (o_hburst != INCR);
 assign htrans0_busy1k  = htrans0_busy
-                       & (~|haddr[0][9:0] | ((haddr[0] & ~x_mask) == haddr[0]))
+                       & (~|haddr[0][9:0] | ((haddr[0] & x_mask) == haddr[0]))
                        & rd_wr;
 
 // Output drivers.
@@ -193,18 +219,20 @@ assign hbusreq_nxt = rd_wr | ~x_first_xfer | ~htrans1_idle;
 `FREEAHB_FF(skbuf_mem[1], skbuf_mem_nxt[1], ~o_stall)
 `FREEAHB_FF(skbuf_mem[2], skbuf_mem_nxt[2], ~o_stall)
 
+assign skbuf_mem_nxt[2] =
+{i_wr_data, wr_int, rd_int, i_addr, fxfer, i_wrap, i_min_len, i_size, 32'd0};
+
 assign
-{x_wr_data, x_wr, x_rd, x_min_len, x_wrap, x_addr, x_size, x_first_xfer, x_mask}
+{x_wr_data, x_wr, x_rd, x_addr, x_first_xfer, x_wrap, x_min_len, x_size, x_mask}
 =  o_stall ? skbuf_mem[0] : skbuf_mem[1] ;
 
-assign mask_precmp      = i_wrap ? get_mask ( i_min_len, i_size ) : 'd0;
+assign prod             = skbuf_mem[2][50:35] * ('d1 << skbuf_mem[2][34:32]);
+assign mask_precmp      = skbuf_mem[2][51] ? get_mask ( prod ) : 'd0;
 assign rd_int           = i_rd & ~i_idle;
 assign wr_int           = i_wr & ~i_idle;
 assign fxfer            = i_first_xfer | i_idle;
 assign skbuf_mem_nxt[0] = skbuf_mem[1];
 assign skbuf_mem_nxt[1] = skbuf_mem[2] | {{(DATA_WDT+55){1'd0}}, mask_precmp};
-assign skbuf_mem_nxt[2] =
-{i_wr_data, wr_int, rd_int, i_min_len, i_wrap, i_addr, i_size, fxfer, 32'd0};
 
 // Pipe Stage 1 (ADDR)
 
@@ -235,7 +263,7 @@ recompute_brst ?
 
 assign addr_sc_sc = haddr[0] + ({31'd0, ~htrans0_busy} << x_size);
 
-for(genvar i=0;i<32;i++) begin : l_addr_sc
+for(genvar i=0;i<32;i++) begin : l_addr_sc // Mask=1 preserves bit.
     assign addr_sc[i] = x_mask[i] ? haddr[0][i] : addr_sc_sc[i];
 end : l_addr_sc
 
@@ -268,14 +296,14 @@ pend_split,     htrans[0],   haddr[0],   beat_ctr,     burst_ctr, hburst
 },{
 pend_split_nxt, htrans0_nxt, haddr0_nxt, beat_ctr_nxt, burst_ctr_nxt, hburst_nxt
 ,htrans2_nxt,   mask0_nxt,   hwdata0_nxt, hwrite0_nxt, hsize0_nxt
-},clkena_st1)
+}, clkena_st1)
 
-assign htrans2_nxt = ( spl_ret_cyc_1 & ~htrans2_sq_nsq) ? htrans[0] :
-                     (~spl_ret_cyc_1 & ~pend_split    ) ? IDLE : htrans[2];
+assign htrans2_nxt = load_htrans                    ? htrans[0] :
+                     (~spl_ret_cyc_1 & ~pend_split) ? IDLE      : htrans[2];
 
 // Backup current transaction during SPLIT/RETRY (htrans[2] handled above).
 
-assign clkena_st1_idx2  = clkena_st1 & spl_ret_cyc_1 & ~htrans2_sq_nsq;
+assign clkena_st1_idx2  = clkena_st1 & load_htrans;
 
 `FREEAHB_FF({mask[2], hwdata[2], hwrite[2], hsize[2], haddr[2], beatx},
             {mask[0], hwdata[0], hwrite[0], hsize[0], haddr[0], beat},
@@ -294,11 +322,23 @@ clkena_st2)
 
 assign clkena_st3  =  gnt[1] & i_hready & htrans1_sq_nsq & ~hresp_splt_ret;
 assign rd_dav_nxt  = clkena_st3 & ~hwrite[1];
-assign rot_amt_1   = data_rota('d1, hsize[1]);
-assign rd_data_nxt = i_hrdata >> rot_amt_1;
+assign rd_rot_nxt  = data_rota('d1, hsize[1]);
+assign rd_data_nxt = i_hrdata;
 
-`FREEAHB_FF({o_rd_data, o_rd_data_addr}, {rd_data_nxt, haddr[1]}, clkena_st3)
-`FREEAHB_FF(o_rd_data_dav, rd_dav_nxt, 1'd1)
+`FREEAHB_FF({rd_data_int, rd_addr_int, rd_rot_int},
+            {rd_data_nxt, haddr[1],    rd_rot_nxt},
+            clkena_st3)
+
+`FREEAHB_FF(rd_dav_int, rd_dav_nxt, 1'd1)
+
+// Pipe Stage 4 (Output Data)
+
+assign rd_data_fin_nxt = rd_data_int >> rd_rot_int;
+
+`FREEAHB_FF({o_rd_data, o_rd_data_addr},
+            {rd_data_fin_nxt, rd_addr_int}, rd_dav_int)
+
+`FREEAHB_FF(o_rd_data_dav, rd_dav_int, 1'd1)
 
 // Error detect.
 
@@ -306,6 +346,10 @@ assign err = ~((beat_ctr >= 'sd0) & (burst_ctr >= 'sd0) & (burst_ctr <= 'sd16));
 
 `FREEAHB_FF(o_err, err, 1'd1)
 
+// EOM
+assign unused_ok = |{1'd1,
+                     x_wrap
+                    };
 endmodule : ahb_manager
 
 // -----------------------------------------------------------------------------

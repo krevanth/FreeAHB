@@ -30,13 +30,17 @@ endpackage
 module ahb_manager_test import tb_pack::*; (input  i_hclk, output logic sim_err = 1'd0, output logic sim_err1 = 1'd0,
                                             output logic sim_ok = 1'd0);
 
-parameter DATA_WDT  = 32;
-parameter MAX_LEN   = 200;
-parameter MIN_LEN   = 40;
-parameter BASE_ADDR = 'h3FF;
+parameter DATA_WDT     = 32;
+parameter MAX_LEN      = 200;
+parameter MIN_LEN      = 40;
+parameter [2:0] SIZE   = 1;
+localparam MEM_SIZE    = MAX_LEN * (2 ** SIZE);
+localparam BEAT_WDT    = 16;
 
-localparam MEM_SIZE = MAX_LEN;
-localparam BEAT_WDT = 16;
+parameter BASE_ADDR    = SIZE == 0 ? 'h3FF :
+                         SIZE == 1 ? 'h3FE :
+                         SIZE == 2 ? 'h3FC :
+                         SIZE == 3 ? 'h3F8 : 'h0;
 
 bit                    i_hreset_n;
 logic                  o_err;
@@ -54,7 +58,13 @@ logic                  o_hbusreq;
 logic                  o_next;
 logic   [DATA_WDT-1:0] i_data;
 bit      [31:0]        i_addr;
-t_hsize                i_size = W8;
+t_hsize                i_size = SIZE == 0 ? W8   :
+                                SIZE == 1 ? W16  :
+                                SIZE == 2 ? W32  :
+                                SIZE == 3 ? W64  :
+                                SIZE == 4 ? W128 :
+                                SIZE == 5 ? W256 :
+                                SIZE == 6 ? W512 : W1024;
 bit                    i_wrap;
 bit                    i_wr;
 bit                    i_rd;
@@ -116,7 +126,7 @@ end
 logic stall_tmp;
 logic [2:0] rand_sel;
 
-assign o_next  = ~stall_tmp;
+assign o_next = ~stall_tmp;
 
 ahb_manager #(
     .DATA_WDT(DATA_WDT),
@@ -179,7 +189,7 @@ begin
     begin
         rd_cycles <= rd_cycles + 'd1;
 
-        assert(o_data + BASE_ADDR == o_addr)
+        assert(o_data == ((o_addr - BASE_ADDR)/(2**SIZE)))
         begin
             $display("OK! Data check passed! o_data=0x%x o_addr=0x%x BASE_ADDR=0x%x",
             o_data, o_addr, BASE_ADDR);
